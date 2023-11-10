@@ -37,33 +37,22 @@ from torch_geometric_temporal.signal import StaticGraphTemporalSignal, StaticGra
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 
-
-PATH_PROCESSED_DATA = r"data/Processed_res21_1_clusteredGT.csv"
-PATH_TRAVEL_CONTROLS = r"data/international_travel_covid.csv"
-PATH_COUNTRY_LIST = r"data/countries_clustered.csv"
-PATH_VARIANT_LIST = r"data/all_vars21_clustered.csv"
-PATH_GROWTH_RATES = r"data/growth_rates_clustered.csv"
-PATH_VAR_22MAY = r"data/global_vars_May22.csv"
-
-PATH_COUNTRY_ADJ = 'data/country_adj_fullname.json'
-
-PATH_ROUTES = r"data/routes.dat"
-PATH_AIRPORTS = r"data/airports.dat"
+import path_values as paths
 
 nb_of_countries = 0
-time_data = pd.read_csv(PATH_PROCESSED_DATA)
+time_data = pd.read_csv(paths.PATH_PROCESSED_DATA)
 
 #Load GT
-data_GT = pd.read_csv(PATH_PROCESSED_DATA)
-restrictions = pd.read_csv(PATH_TRAVEL_CONTROLS)
+data_GT = pd.read_csv(paths.PATH_PROCESSED_DATA)
+restrictions = pd.read_csv(paths.PATH_TRAVEL_CONTROLS)
 
-with open(PATH_COUNTRY_LIST, mode = 'r') as file:
+with open(paths.PATH_COUNTRY_LIST, mode = 'r') as file:
     reader = csv.reader(file)
     countries = []
     for row in reader:
         countries.append(row[0])
 
-with open(PATH_VARIANT_LIST, mode = 'r') as file:
+with open(paths.PATH_VARIANT_LIST, mode = 'r') as file:
     reader = csv.reader(file)
     all_variants = []
     for row in reader:
@@ -99,8 +88,8 @@ def checkCountries(c1,c2):
             print(c, difflib.get_close_matches(c, c2))
             
 # Define adjacency matrix
-routes = pd.read_csv(PATH_ROUTES, header = None) 
-airports = pd.read_csv(PATH_AIRPORTS, header = None) #4th is country
+routes = pd.read_csv(paths.PATH_ROUTES, header = None) 
+airports = pd.read_csv(paths.PATH_AIRPORTS, header = None) #4th is country
 
 # Country-AirportID
 IATA_country = np.transpose(np.array([list(airports[3]), list(airports[0])]))
@@ -118,7 +107,7 @@ for i in range(len(rou)):
     route[i][0] = str(IATA_country[np.where(IATA_country[:,1]==rou[i][0]),0][0][0])   
     route[i][1] = str(IATA_country[np.where(IATA_country[:,1]==rou[i][1]),0][0][0])
     
-variants = pd.read_csv(PATH_VAR_22MAY) #3rd
+variants = pd.read_csv(paths.PATH_VAR_22MAY) #3rd
 
         
 #United States->USA
@@ -131,7 +120,7 @@ adj_mat = np.eye(len(countries))
 
 #Aruba are islands and go to the else since they have no adj
 
-with open(PATH_COUNTRY_ADJ, 'r') as json_file:
+with open(paths.PATH_COUNTRY_ADJ, 'r') as json_file:
   data_json = json.load(json_file)
   for i in range(len(countries)):
       if countries[i] == "Aruba" or countries[i] == "Fiji" or countries[i] == "Guadeloupe" or countries[i] == "Iceland" or countries[i] == "Jamaica" or countries[i] == "Maldives" or countries[i] == "Mauritius" or countries[i] == "New Zealand" or countries[i] =="Seychelles":
@@ -173,7 +162,7 @@ def remove_outliers(data):
     return clean_data
     
 
-S = pd.read_csv(PATH_GROWTH_RATES)
+S = pd.read_csv(paths.PATH_GROWTH_RATES)
 
 def edgeW_calc(df):
     weighted_mat = np.ones((len(countries),len(countries)))      
