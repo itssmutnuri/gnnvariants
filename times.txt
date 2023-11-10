@@ -1,0 +1,11 @@
+Script Execution Timings:
+GNNScript.py: 0 minutes 52 seconds
+Ablations/wos_GNNScript.py: 0 minutes 45 seconds
+Ablations/wosT1_GNNScript.py: 0 minutes 52 seconds
+Ablations/t1_GNNScript.py: 0 minutes 57 seconds
+Ablations/t3_GNNScript.py: 0 minutes 51 seconds
+Ablations/t4_GNNScript.py: 0 minutes 55 seconds
+Ablations/enc0_GNNScript.py: 0 minutes 52 seconds
+Ablations/enc1_GNNScript.py: 0 minutes 52 seconds
+Ablations/enc2_GNNScript.py: 0 minutes 57 seconds
+Ablations/enc3a_GNNScript.py: 1 minutes 38 seconds
