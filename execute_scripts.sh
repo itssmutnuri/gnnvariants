@@ -15,11 +15,11 @@ execute_and_time() {
     seconds=$((elapsed_time % 60))
 
     # Append the timing info to times.txt
-    echo "$script_name: $minutes minutes $seconds seconds" >> times.txt
+    echo "$script_name: $minutes minutes $seconds seconds" >> Results/times.txt
 }
 
 # Initialize the times.txt with a header
-echo "Script Execution Timings:" > times.txt
+echo "Script Execution Timings:" > Results/times.txt
 
 # List of scripts to run
 scripts=("GNNScript.py" 

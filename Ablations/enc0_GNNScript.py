@@ -42,6 +42,9 @@ from torch_geometric_temporal.signal import StaticGraphTemporalSignal, StaticGra
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import path_values as paths
 
 nb_of_countries = 0

@@ -4,7 +4,7 @@ Code with country adjacency and travel restrictions
 
 Ablation: 
 Rather than just adding the corresponding S as a feature to a certain variant's snapshot, try encoding all S values and input that.
-Encoding used is a autoencoder with variable input size for retrospective S values which are embedded directly into the GNN.
+Encoding used is a autoencoder with variable input size for retrospective S values which are embedded into the GNN
 """
 
 import numpy as np
@@ -41,6 +41,9 @@ from torch_geometric_temporal.signal import temporal_signal_split
 from torch_geometric_temporal.signal import StaticGraphTemporalSignal, StaticGraphTemporalSignalBatch
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
+
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import path_values as paths
 
@@ -475,7 +478,6 @@ class GCN(torch.nn.Module):
         self.norm2 = norm.GraphNorm(16)
         self.fc1 = torch.nn.Linear(16, 1)
 
-
     def forward(self, data, edge_weight, norm = False):
         x, edge_index = data.x, data.edge_index
         x1 = self.conv1(x, edge_index, edge_weight)
@@ -722,12 +724,12 @@ encodings = {
     }
 
 TYPE = 3
-IS_DEBUG = True
+IS_DEBUG = False
 
 ITERATION_NAME = f"eS_{encodings[TYPE].__name__}"
 
 PARENT_FOLDER = "Results"
-SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
+SUB_FOLDER = f"{ITERATION_NAME}em_{timestamp}"
 
 ERROR_FILE = 'status.csv'
 
