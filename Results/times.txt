@@ -9,3 +9,6 @@ Ablations/enc0_GNNScript.py: 166 minutes 39 seconds
 Ablations/enc1_GNNScript.py: 186 minutes 29 seconds
 Ablations/enc2_GNNScript.py: 189 minutes 9 seconds
 Ablations/enc3a_GNNScript.py: 376 minutes 28 seconds
+Ablations/t5_GNNScript.py: 400 minutes 42 seconds
+Ablations/t6_GNNScript.py: 172 minutes 27 seconds
+Ablations/t7_GNNScript.py: 452 minutes 49 seconds

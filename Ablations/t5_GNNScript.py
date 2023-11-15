@@ -3,8 +3,7 @@
 Code with country adjacency and travel restrictions
 
 Ablation: 
-Rather than just adding the corresponding S as a feature to a certain variant's snapshot, try encoding all S values and input that.
-Encoding used is a autoencoder with variable input size for retrospective S values which are embedded into the GNN
+Set T = 4
 """
 
 import numpy as np
@@ -20,15 +19,11 @@ from matplotlib import pyplot as plt
 import json
 import os
 
-from sklearn.linear_model import LinearRegression
-
 import math
 import torch
 import scipy.io
 import torch
-from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout,MSELoss
-import torch.optim as optim
-
+from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout
 import torch.nn.functional as F
 from torch_geometric_temporal.nn.recurrent import DCRNN
 from tqdm import tqdm
@@ -168,6 +163,7 @@ def remove_outliers(data):
     upper_bound = q3 + 1.5 * iqr
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
+    
 
 S = pd.read_csv(paths.PATH_GROWTH_RATES)
 
@@ -206,15 +202,6 @@ def edgeW_calc(df):
     
     return edge_weights
 
-def select_sublists(si_values):
-    # Find the minimum length among all lists
-    min_length = min(len(lst) for lst in si_values)
-
-    # Select up to min_length elements from each list
-    selected_elements = [lst[:min_length] for lst in si_values]
-
-    return selected_elements
-
 # Get the unique dates and pangoLineages in the DataFrame
 def process_data(df,T):
     dates = df['date'].unique()
@@ -222,15 +209,10 @@ def process_data(df,T):
     feat_mats = []
     target_mats = []
     edge_weights = []
-    si_list = []
     # Loop over each date and pangoLineage (each gives us a snapshot)
     for d in dates:
         pangos = df[(df['date'] == d)]
         pangos = pangos['pangoLineage'].unique()
-
-        filter_s_vals = S[S['variant'].isin(pangos)]
-        si_list.append(filter_s_vals.S)
-
         controls = restrictions[restrictions['date'] == d]
         
         EW = edgeW_calc(controls)
@@ -238,9 +220,11 @@ def process_data(df,T):
         # what if we have a ariant not present at a given dat, but is at other dates?
         # batch each varaint group  and dont do this maybe?
         for pangoLineage in pangos: #pangoLineages:
+            p_index = all_variants.index(pangoLineage)
+            si = S.S[p_index]
 
             # Create the feat_matrix and target_matrix
-            feat_matrix = np.zeros((len(countries), T))
+            feat_matrix = np.zeros((len(countries), T+1))
             target_matrix = np.zeros((len(countries), 2))
             target_matrix[:,0] = -1 # Will never reach prevalence
             countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -278,9 +262,10 @@ def process_data(df,T):
                     prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
 
                 log_prev_vals = np.log(prev_values_c + (10**-10))
+                appended_prev_si = np.append(log_prev_vals, si)
                 row_index = countries.index(c)
 
-                feat_matrix[row_index, : ] = log_prev_vals
+                feat_matrix[row_index, : ] = appended_prev_si
                 
                 # Get the days_to_prev value for the current date and pangoLineage
                 target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
@@ -302,9 +287,7 @@ def process_data(df,T):
     dataset = StaticGraphTemporalSignal(edge_index = edge_index.numpy().T, edge_weight = edge_index.numpy().T,
                                         features = feat_mats, targets = target_mats)
     
-    si_sublist = select_sublists(si_list)
-
-    return dataset,edge_weights, si_sublist
+    return dataset,edge_weights
         
 def process_data_test(df,T,d):
     
@@ -312,23 +295,19 @@ def process_data_test(df,T,d):
     
     feat_mats = []
     target_mats = []
+    # Loop over each date and pangoLineage (each gives us a snapshot)
     edge_weights = []
-    si_list = []
-
     pangos = df['pangoLineage'].unique()
-
-    filter_s_vals = S[S['variant'].isin(pangos)]
-    si_list.append(filter_s_vals.S)
-    
     controls = restrictions[restrictions['date'] == d]
     EW = edgeW_calc(controls)
 
     # what if we have a ariant not present at a given dat, but is at other dates?
     # batch each varaint group  and dont do this maybe?
     for pangoLineage in pangos: #pangoLineages:
-
+        p_index = all_variants.index(pangoLineage)
+        si = S.S[p_index]
         # Create the feat_matrix and target_matrix
-        feat_matrix = np.zeros((len(countries), T))
+        feat_matrix = np.zeros((len(countries), T+1))
         target_matrix = np.zeros((len(countries), 2))
         target_matrix[:,0] = -1 #Will never reach prevalence
         countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -364,9 +343,10 @@ def process_data_test(df,T,d):
               prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
             
             log_prev_vals = np.log(prev_values_c + (10**-10))
+            appended_prev_si = np.append(log_prev_vals, si)
             row_index = countries.index(c)
 
-            feat_matrix[row_index, : ] = log_prev_vals
+            feat_matrix[row_index, : ] = appended_prev_si
             
             # Get the days_to_prev value for the current date and pangoLineage
             target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
@@ -388,58 +368,33 @@ def process_data_test(df,T,d):
     dataset = StaticGraphTemporalSignal(edge_index = edge_index.numpy().T, edge_weight = edge_index.numpy().T,
                                         features = feat_mats, targets = target_mats)
     
-    si_sublist = select_sublists(si_list)
-
-    return dataset,edge_weights, si_sublist
-
-def concat_tensors(tensor1, tensor2, concat_dim=0):
-    # Expand dimensions of tensor2 to match tensor1
-    while tensor2.dim() < tensor1.dim():
-        tensor2 = tensor2.unsqueeze(-1)  # Add dimension at the end
-
-    # Adjust size of the last dimension of tensor2 to match tensor1
-    if tensor2.dim() > 1 and tensor2.size(-1) != tensor1.size(-1):
-        tensor2 = tensor2.expand(-1, tensor1.size(-1))
-
-    # Now tensor1 and tensor2 have the same number of dimensions and compatible sizes
-    return torch.cat((tensor1, tensor2), dim=concat_dim)
+    return dataset,edge_weights
 
 # Define GNN
 class GCN(torch.nn.Module):
-    def __init__(self, node_features, concat_length):
-        super(GCN, self).__init__()
-        # Adjust the input features size for the first convolution layer
+    def __init__(self,node_features):
+        super(GCN,self).__init__()
         self.conv1 = GCNConv(node_features, 32)
         self.conv2 = GCNConv(32, 16)
         self.norm1 = norm.GraphNorm(32)
         self.norm2 = norm.GraphNorm(16)
         self.fc1 = torch.nn.Linear(16, 1)
 
-    def forward(self, data, edge_weight, si_tensor, norm=False):
+
+    def forward(self, data, edge_weight, norm = False):
         x, edge_index = data.x, data.edge_index
-
-        print(x.shape, si_tensor.shape)
-        
-        # Concatenate si_tensor with x at the beginning
-        x = concat_tensors(x, si_tensor,concat_dim=1)
-
-        # Ensure x is of the same dtype as the weights of the first convolution layer
-        x = x.to(dtype=torch.float32)
-
-        # First convolution layer
         x1 = self.conv1(x, edge_index, edge_weight)
         x = F.leaky_relu(x1)
         if norm:
-            x = self.norm1(x)
+          x = self.norm1(x)
         x = F.dropout(x, training=self.training)
-        
-        # Second convolution layer
         x2 = self.conv2(x.float(), edge_index, edge_weight.float())
+
         x2 = F.leaky_relu(x2)
         if norm:
-            x2 = self.norm2(x2)
+          x2 = self.norm2(x2)
         
-        # Fully connected layer
+        # Might need normalization here since we concatenate a value between 0 and 1
         x1 = self.fc1(x2)
         return x1
           
@@ -543,11 +498,7 @@ class EarlyStopper:
         return False
             
 # Train GNN
-def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weights_V, si_values, reg = 1):
-    
-    si_tensors = [torch.tensor(series.values) for series in si_values]
-    si_tensor = torch.stack(si_tensors)
-
+def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weights_V, reg = 1):
     torch.cuda.empty_cache()
     for epoch in tqdm(range(epochs)):
         model.train()
@@ -556,7 +507,7 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
         for time, snapshot in enumerate(train_dataset):
             EW = edge_weights_T[time]
            
-            y_hat = model(snapshot,EW, si_tensor)
+            y_hat = model(snapshot,EW)
             
             if reg:
               y_hat = F.relu(y_hat)
@@ -579,7 +530,7 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
             for time, snapshot in enumerate(val_dataset):
                 EW = edge_weights_V[time]
                 if reg:
-                  y_hat = model(snapshot,EW, si_tensor)
+                  y_hat = model(snapshot,EW)
                   mask = snapshot.y[:,1].detach().numpy() == 1
                   val_cost = val_cost + torch.mean((y_hat[mask].squeeze()-snapshot.y[mask,0].to(device))**2)
                 else:
@@ -601,11 +552,7 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
     return early_stopper.weights
         
 # Test GNN
-def eval_F1_MAE(edge_weights_Te, si_values):
-
-    si_tensors = [torch.tensor(inner_list) for inner_list in si_values]
-    si_tensor = torch.stack(si_tensors)
-
+def eval_F1_MAE(edge_weights_Te):
     model_r.eval()
     model_c.eval()
     cost_1 = torch.tensor(0).to(device)
@@ -616,7 +563,7 @@ def eval_F1_MAE(edge_weights_Te, si_values):
     with torch.no_grad():
         for time, snapshot in enumerate(test_dataset): 
             EW = edge_weights_Te[time]
-            y_hat = model_c(snapshot,EW, si_tensor)
+            y_hat = model_c(snapshot,EW)
             pred = F.sigmoid(y_hat)
             CF = CF + confusion_matrix(snapshot.y[:,1].detach().numpy(), np.round((pred.squeeze().detach().numpy())))
             cost_1 = cost_1 + f1_score(snapshot.y[:,1].detach().numpy(), np.round((pred.squeeze().detach().numpy())), average = 'macro')
@@ -628,7 +575,7 @@ def eval_F1_MAE(edge_weights_Te, si_values):
             if np.any(correct_idx):
                 ## NEED TO PUT ONE MORE HERE TO SEE WHICH NODES TO PREDICT FOR
                 count += 1
-                y_hat = model_r(snapshot,EW, si_tensor)
+                y_hat = model_r(snapshot,EW)
                 pred = y_hat.squeeze()[correct_idx]
                 cost = cost + torch.mean(torch.abs(((np.ceil(np.maximum(pred,1)/14)*14)-snapshot.y[correct_idx,0])))
                 cost_median = cost_median + torch.median(torch.abs(((np.ceil(np.maximum(pred,1)/14)*14)-snapshot.y[correct_idx,0])))
@@ -666,15 +613,13 @@ def append_to_csv(filepath, values, header=None):
         
         writer.writerow(values)
 
-T = 2
+T = 5
 
 # Generate the current timestamp for the entire run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-IS_DEBUG = True
-
-ITERATION_NAME = f"eS_embedGNN"
+ITERATION_NAME = "T5"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
@@ -685,6 +630,7 @@ ERROR_FILE = 'status.csv'
 variant_names = data_GT['pangoLineage'].unique().tolist()
 print(variant_names)
 
+IS_DEBUG = False
 
 for variant in variant_names:
 
@@ -715,17 +661,9 @@ for variant in variant_names:
     start_weights_r = []
     start_weights_c = []
 
-    should_skip = True
-
     for d in dates: # retrospective dates
+        try:
 
-        if should_skip:
-            should_skip = False
-            print(d, type(d))
-            continue
-
-        # try:
-        else:
             df = time_data[time_data['date']< (d - pd.Timedelta(days=T-1))] #Retro TRAINING data
             #One timestep or all timesteps for testing? && PER VARIANT
             
@@ -734,11 +672,7 @@ for variant in variant_names:
             if len(df_GT_Te) ==0:
                 continue
                 
-            dataset,edgeWeights, si_values = process_data(df,T)
-
-            # si_values = si_df.values
-
-            si_len = len(si_values[0])
+            dataset,edgeWeights = process_data(df,T) 
             
             #validate on approx last month of data
             100/dataset.snapshot_count
@@ -747,8 +681,7 @@ for variant in variant_names:
             train_edges = edgeWeights[:LL]
             val_edges = edgeWeights[LL:]
             
-            test_dataset, edgeWeightsTE, si_testvals = process_data_test(df_GT_Te,T,d)
-
+            test_dataset, edgeWeightsTE = process_data_test(df_GT_Te,T,d)
             #Find class weights
             all_labels = np.concatenate(train_dataset.targets)
             classes, classes_counts = np.unique(all_labels[:,1], return_counts = True)
@@ -760,8 +693,8 @@ for variant in variant_names:
             torch.cuda.empty_cache()
             epochs = 100
             device = 'cpu'
-            model_r = GCN(node_features = T, concat_length = si_len).to(device)
-            model_c = GCN(node_features = T, concat_length = si_len).to(device)
+            model_r = GCN(node_features = T + 1).to(device)
+            model_c = GCN(node_features = T + 1).to(device)
             
             if len(start_weights_r) != 0:              
               param_iter = iter(model_r.parameters())
@@ -773,7 +706,7 @@ for variant in variant_names:
             optimizer = torch.optim.Adam(model_r.parameters(), lr=0.05)
             early_stopper = EarlyStopper(patience=3,min_delta=5)
             model = model_r
-            start_weights_r = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, si_values, 1)
+            start_weights_r = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, 1)
             model_r = model
             
             if len(start_weights_c) != 0:              
@@ -786,7 +719,7 @@ for variant in variant_names:
             optimizer = torch.optim.Adam(model_c.parameters(), lr=0.01)
             early_stopper = EarlyStopper(patience=3,min_delta=0.05)
             model = model_c
-            start_weights_c = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, si_values, 0)
+            start_weights_c = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, 0)
             model_c = model
 
             # Evaluate on date d USING GT:
@@ -794,7 +727,7 @@ for variant in variant_names:
             # For correctly classified 1s, find MAE
             # save thes values in lists for later plotting
 
-            CF1, f11, MAE1, MAE2, pred, country_mask = eval_F1_MAE(edgeWeightsTE,si_values)
+            CF1, f11, MAE1, MAE2, pred, country_mask = eval_F1_MAE(edgeWeightsTE)
 
             # Convert 1s and 0s to True and False
             bool_country = [bool(val) for val in country_mask]
@@ -807,10 +740,10 @@ for variant in variant_names:
             if MAE1 == -1:
                 break
     
-        # except Exception as e:
-        #     print(f"Error encountered for variant {variant}, Skipping.")
-        #     append_to_csv(status_filepath, ['ERROR', variant, f'{e} with dates {d}'])
-        #     continue
+        except Exception as e:
+            print(f"Error encountered for variant {variant}, Skipping.")
+            append_to_csv(status_filepath, ['ERROR', variant, f'{e} with dates {d}'])
+            continue
     
     append_to_csv(status_filepath, ['SUCCESS', variant, 'None'])
 
