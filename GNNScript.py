@@ -17,7 +17,7 @@ from datetime import date, timedelta, datetime
 from matplotlib import pyplot as plt
 import json
 import os
-
+#from csaps import csaps
 import math
 import torch
 import scipy.io
@@ -67,7 +67,6 @@ countries = countries[1:]
 if nb_of_countries !=0:
   filtered_country_names = []
   top_X_countries = time_data['country'].value_counts().nlargest(nb_of_countries).index.tolist()
-
   # Now, you have a list of the top 60 countries with the most data
   # You can use this list to filter your DataFrame, for example:
   time_data = time_data[time_data['country'].isin(top_X_countries)]
@@ -78,7 +77,6 @@ if nb_of_countries !=0:
   
   countries = filtered_country_names
 
-
 def checkCountries(c1,c2):
     for c in c1:
         if c in c2:
@@ -86,11 +84,11 @@ def checkCountries(c1,c2):
         else:
             print(c, difflib.get_close_matches(c, c2))
             
-# Define adjacency matrix
+#%% Define adjacency matrix
 routes = pd.read_csv(paths.PATH_ROUTES, header = None) 
 airports = pd.read_csv(paths.PATH_AIRPORTS, header = None) #4th is country
 
-# Country-AirportID
+#Country-AirportID
 IATA_country = np.transpose(np.array([list(airports[3]), list(airports[0])]))
 
 rou = np.transpose(np.array([list(routes[3]), list(routes[5])]))
@@ -107,19 +105,16 @@ for i in range(len(rou)):
     route[i][1] = str(IATA_country[np.where(IATA_country[:,1]==rou[i][1]),0][0][0])
     
 variants = pd.read_csv(paths.PATH_VAR_22MAY) #3rd
-
         
 #United States->USA
 route[:,0] = np.char.replace(route[:,0], "United States", "USA")
 route[:,1] = np.char.replace(route[:,1], "United States", "USA")
 
-#list(set(variants['country']))
-
 adj_mat = np.eye(len(countries))
 
 #Aruba are islands and go to the else since they have no adj
 
-with open(paths.PATH_COUNTRY_ADJ, 'r') as json_file:
+with open('data/country_adj_fullname.json', 'r') as json_file:
   data_json = json.load(json_file)
   for i in range(len(countries)):
       if countries[i] == "Aruba" or countries[i] == "Fiji" or countries[i] == "Guadeloupe" or countries[i] == "Iceland" or countries[i] == "Jamaica" or countries[i] == "Maldives" or countries[i] == "Mauritius" or countries[i] == "New Zealand" or countries[i] =="Seychelles":
@@ -134,7 +129,7 @@ with open(paths.PATH_COUNTRY_ADJ, 'r') as json_file:
         C = data_json[countries[i]]
       for c in C:
         adj_mat[i, np.isin(countries,c)] = 1
-
+        
 # assume adj_matrix is your adjacency matrix
 adj_tensor = torch.tensor(adj_mat)
 
@@ -149,8 +144,7 @@ edge_index = edge_index.long()
 
 # (optional) transpose edge_index to match the PyTorch Geometric format
 edge_index = edge_index.transpose(0, 1)
-
-# Load S and cap if needed
+#%% Load S and cap if needed
 def remove_outliers(data):
     q1 = np.nanpercentile(data, 25)
     q3 = np.nanpercentile(data, 75)
@@ -159,11 +153,12 @@ def remove_outliers(data):
     upper_bound = q3 + 1.5 * iqr
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
-
+    
 S = pd.read_csv(paths.PATH_GROWTH_RATES)
 
 def edgeW_calc(df):
-    weighted_mat = np.ones((len(countries),len(countries)))      
+    weighted_mat = np.ones((len(countries),len(countries)))
+      
 
     # sort by restriction lvls 0->4
     df = df.sort_values(by='international_travel_controls')
@@ -196,44 +191,39 @@ def edgeW_calc(df):
     edge_weights = torch.DoubleTensor(edge_weights)
     
     return edge_weights
-
 # Get the unique dates and pangoLineages in the DataFrame
 def process_data(df,T):
-    dates = df['date'].unique()
-   
-    feat_mats = []
-    target_mats = []
+    #df['date'] = pd.to_datetime(df['date'])
+    dates = df['date'].unique()# df['date'].unique()
+    feat_mats = []#np.empty((0,len(countries),T+1))
+    target_mats = []#np.array((0,len(countries),2))
     edge_weights = []
     # Loop over each date and pangoLineage (each gives us a snapshot)
     for d in dates:
         pangos = df[(df['date'] == d)]
         pangos = pangos['pangoLineage'].unique()
+        #print(restrictions)       
         controls = restrictions[restrictions['date'] == d]
         
         EW = edgeW_calc(controls)
-
         # what if we have a ariant not present at a given dat, but is at other dates?
         # batch each varaint group  and dont do this maybe?
         for pangoLineage in pangos: #pangoLineages:
             p_index = all_variants.index(pangoLineage)
-            si = S.S[p_index]
-
             # Create the feat_matrix and target_matrix
             feat_matrix = np.zeros((len(countries), T+1))
             target_matrix = np.zeros((len(countries), 2))
-            target_matrix[:,0] = -1 # Will never reach prevalence
+            target_matrix[:,0] = -1 #Will never reach prevalence
             countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
             
             k1 = countries_dom.drop_duplicates(subset='country', keep = 'first')
             idx2 = (k1.date - d).dt.days
             idx2[idx2 < 0] =0
 
-            # Check if date of dom has passed, if it did then 0, else calculate it.
+            #Check if date of dom has passed, if it did then 0, else calculate it.
             idx = [countries.index(si) for si in countries_dom['country'].unique()]
             target_matrix[idx,0] = idx2
-            target_matrix[idx,1] = 1
-
-            # Get the prev values for the current date and pangoLineage
+            target_matrix[idx,1] = 1 
             prev_values = df[(df['date'] >= (pd.Timestamp(d) - pd.DateOffset(weeks = (T*2)-1))) &
                              (df['date'] <= d) &
                              (df['pangoLineage'] == pangoLineage)]
@@ -244,25 +234,28 @@ def process_data(df,T):
                 continue
             for c in countries_pres:
                 temp_c = prev_values[(prev_values['country'] == c)].sort_values(by='date')
-                two_week_intervals = pd.date_range(end=pd.Timestamp(d), periods=3, freq='-2W')
+                two_week_intervals = pd.date_range(end=pd.Timestamp(d), periods=T, freq='2W-MON')
                 temp_c = temp_c[temp_c['date'].isin(two_week_intervals)]
                 prev_values_c = temp_c['prev'].values
 
                 # If no prev values were found, fill the row with 0s
                 if len(prev_values_c) == 0:
                     prev_values_c = np.zeros(T)
+                    si = 0
 
                 # If not enough prev values were found, pad with 0s
                 elif len(prev_values_c) < T:
                     prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
-
+                    si = temp_c['S'].values[-1]
+                else:
+                    si = temp_c['S'].values[-1]
+              
                 log_prev_vals = np.log(prev_values_c + (10**-10))
                 appended_prev_si = np.append(log_prev_vals, si)
                 row_index = countries.index(c)
 
                 feat_matrix[row_index, : ] = appended_prev_si
-                
-                # Get the days_to_prev value for the current date and pangoLineage
+
                 target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
                 
                 days_to_prev = target_vals['days_to_prev'].values
@@ -275,7 +268,7 @@ def process_data(df,T):
                 # Set the value in the target_matrix to the days_to_prev value
                 target_matrix[row_index, 0] = days_to_prev
                 target_matrix[row_index, 1] = dom
-                
+
             feat_mats.append(feat_matrix)
             target_mats.append(target_matrix)
             edge_weights.append(EW)
@@ -290,13 +283,13 @@ def process_data_test(df,T,d):
     
     feat_mats = []
     target_mats = []
+
     # Loop over each date and pangoLineage (each gives us a snapshot)
     edge_weights = []
     pangos = df['pangoLineage'].unique()
     controls = restrictions[restrictions['date'] == d]
     EW = edgeW_calc(controls)
-
-    # what if we have a ariant not present at a given dat, but is at other dates?
+    #what if we have a ariant not present at a given dat, but is at other dates?
     # batch each varaint group  and dont do this maybe?
     for pangoLineage in pangos: #pangoLineages:
         p_index = all_variants.index(pangoLineage)
@@ -310,40 +303,43 @@ def process_data_test(df,T,d):
         k1 = countries_dom.drop_duplicates(subset='country', keep = 'first')
         idx2 = (k1.date - d).dt.days
         idx2[idx2 < 0] =0
-
         #Check if date of dom has passed, if it did then 0, else calculate it.
         idx = [countries.index(si) for si in countries_dom['country'].unique()]
         target_matrix[idx,0] = idx2
         target_matrix[idx,1] = 1 
-
         # Get the prev values for the current date and pangoLineage
         prev_values = df[(df['date'] >= (pd.Timestamp(d) - pd.DateOffset(weeks = (T*2)-1))) &
                          (df['date'] <= d) &
                          (df['pangoLineage'] == pangoLineage)]
         countries_pres = prev_values['country'].unique()
-
         # what about countries which eventually get filtered out
+        
         if len(countries_pres)==0:
             continue
         for c in countries_pres:
             temp_c = prev_values[(prev_values['country'] == c)].sort_values(by='date')
-            two_week_intervals = pd.date_range(end=pd.Timestamp(d), periods=3, freq='-2W')
+
+            two_week_intervals = pd.date_range(end=pd.Timestamp(d), periods=T, freq='2W-MON')
             temp_c = temp_c[temp_c['date'].isin(two_week_intervals)]
             prev_values_c = temp_c['prev'].values
-            
+
             # If no prev values were found, fill the row with 0s
             if len(prev_values_c) == 0:
               prev_values_c = np.zeros(T)
+              si = 0
             elif len(prev_values_c) < T:
               prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
+              si = temp_c['S'].values[-1]
+            else:
+              si = temp_c['S'].values[-1]
+            
+            
             
             log_prev_vals = np.log(prev_values_c + (10**-10))
             appended_prev_si = np.append(log_prev_vals, si)
             row_index = countries.index(c)
 
             feat_matrix[row_index, : ] = appended_prev_si
-            
-            # Get the days_to_prev value for the current date and pangoLineage
             target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
             
             days_to_prev = target_vals['days_to_prev'].values
@@ -355,7 +351,7 @@ def process_data_test(df,T,d):
             # Set the value in the target_matrix to the days_to_prev value
             target_matrix[row_index, 0] = days_to_prev
             target_matrix[row_index, 1] = dom
-      
+
         feat_mats.append(feat_matrix)
         target_mats.append(target_matrix)
         edge_weights.append(EW)
@@ -375,7 +371,6 @@ class GCN(torch.nn.Module):
         self.norm2 = norm.GraphNorm(16)
         self.fc1 = torch.nn.Linear(16, 1)
 
-
     def forward(self, data, edge_weight, norm = False):
         x, edge_index = data.x, data.edge_index
         x1 = self.conv1(x, edge_index, edge_weight)
@@ -384,92 +379,14 @@ class GCN(torch.nn.Module):
           x = self.norm1(x)
         x = F.dropout(x, training=self.training)
         x2 = self.conv2(x.float(), edge_index, edge_weight.float())
-
         x2 = F.leaky_relu(x2)
         if norm:
           x2 = self.norm2(x2)
-        
-        # Might need normalization here since we concatenate a value between 0 and 1
+
+        #Might need normalization here since we concatenate a value between 0 and 1
         x1 = self.fc1(x2)
         return x1
-          
-class GIN(torch.nn.Module):
-    def __init__(self,node_features):
-        super(GIN,self).__init__()
-        self.conv1 = GINConv(
-            Sequential(Linear(node_features,32),
-                       BatchNorm1d(32), ReLU(),
-                       Linear(32,32), ReLU()))
-        self.conv2 =  GINConv(
-            Sequential(Linear(32,32),
-                       BatchNorm1d(32), ReLU(),
-                       Linear(32,32), ReLU()))
-        self.conv3 =  GINConv(
-            Sequential(Linear(32,32),
-                       BatchNorm1d(32), ReLU(),
-                       Linear(32,1), ReLU()))
-        self.fc1 = torch.nn.Linear(4, 32)      
-        self.fc2 = torch.nn.Linear(32, 1)  
         
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-
-        x1 = self.conv1(x, edge_index)
-        x2 = self.conv2(x1, edge_index)
-        x3 = self.conv3(x2, edge_index)
-
-        # Might need normalization here since we concatenate a value between 0 and 1
-        x1 = torch.sum(x1, dim = 1, keepdim = True)
-        x2 = torch.sum(x2, dim = 1, keepdim = True)
-        x3 = torch.sum(x3, dim = 1, keepdim = True)
-        
-        c = F.sigmoid(x3) #Need class weights
-        h = torch.cat((x1,x2,x3), dim = 1)
-        x = torch.cat([h,c],dim = 1)
-        
-        r = self.fc1(x)
-        r = r.relu()
-        r = F.dropout(r, p=0.5, training = self.training)
-        r = self.fc2(r)
-        return r,x3
-
-class GAT(torch.nn.Module):
-    def __init__(self,node_features,heads):
-        super(GAT,self).__init__()
-        self.conv1 = GATConv(node_features, 32,heads, dropout=0.4)
-        self.conv2 = GATConv(32*heads, 16, heads,concat=False)
-        self.fc1 = torch.nn.Linear(16*heads, 1)
-        self.fc2 = torch.nn.Linear(33, 1)
-
-
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-
-        x1 = self.conv1(x, edge_index)
-        x = F.relu(x1)
-        x = F.dropout(x, training=self.training)
-        x2 = self.conv2(x, edge_index)
-        # Might need normalization here since we concatenate a value between 0 and 1
-        x1 = self.fc1(x2)
-        c = F.sigmoid(x1) #Need class weights
-        x = torch.cat([x,c],dim = 1)
-        r = self.fc2(x)
-        return r,x1
-
-class RecurrentGCN(torch.nn.Module):
-    def __init__(self, node_features):
-        super(RecurrentGCN, self).__init__()
-        self.recurrent = DCRNN(node_features, 32, 1)
-        self.linear = torch.nn.Linear(32, 1)
-
-    def forward(self, x, edge_index, edge_weight):
-        h = self.recurrent(x, edge_index, edge_weight)
-        r = F.relu(h) #r
-        c = F.sigmoid(h)
-        h = torch.cat([r,c],dim = 1)
-        h = self.linear(h)
-        h = F.relu(h)
-        return h
 
 class EarlyStopper:
     def __init__(self, patience = 1, min_delta = 0):
@@ -486,6 +403,7 @@ class EarlyStopper:
             self.weights = [] # clear old weights and save new ones
             for param in weights:
                 self.weights.append(param.data)
+            # self.weights = weights
         elif validation_loss > (self.min_val_loss + self.min_delta):
             self.counter +=1
             if self.counter >= self.patience:
@@ -501,7 +419,6 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
         cost = torch.tensor(0).to(device)
         for time, snapshot in enumerate(train_dataset):
             EW = edge_weights_T[time]
-           
             y_hat = model(snapshot,EW)
             
             if reg:
@@ -536,7 +453,7 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
             val_cost = val_cost.item()
             print("Val _cost: {:.4f}".format(val_cost))
             if early_stopper.early_stop(val_cost, model.parameters()):
-                # Update with best weights and stop training
+                #Update with best weights and stop training
                 count = 0
                 best_weights = early_stopper.weights
                 for param in model.parameters():
@@ -562,8 +479,8 @@ def eval_F1_MAE(edge_weights_Te):
             pred = F.sigmoid(y_hat)
             CF = CF + confusion_matrix(snapshot.y[:,1].detach().numpy(), np.round((pred.squeeze().detach().numpy())))
             cost_1 = cost_1 + f1_score(snapshot.y[:,1].detach().numpy(), np.round((pred.squeeze().detach().numpy())), average = 'macro')
-            correct_idx = (snapshot.y[:,1].detach().numpy() == 1) # Does become prevalent in a given country
-            correct_idx2 = (snapshot.y[:,0].detach().numpy() != 0) # Is not already prevlanet in a given country 
+            correct_idx = (snapshot.y[:,1].detach().numpy() == 1) #Does become prevalent in a given country
+            correct_idx2 = (snapshot.y[:,0].detach().numpy() != 0) #Is not already prevlanet in a given country 
             correct_idx = np.bitwise_and(correct_idx,correct_idx2)
 
             #y_hat has to be > and a multiple of 14
@@ -608,18 +525,19 @@ def append_to_csv(filepath, values, header=None):
         
         writer.writerow(values)
 
-T = 2
+T = 4
 
 # Generate the current timestamp for the entire run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "Baseline"
+ITERATION_NAME = "GNN_CONTROLS_EDGES_ADJ_ONLY_NEW"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
 
 ERROR_FILE = 'status.csv'
+
 
 #Get a list of variants
 variant_names = data_GT['pangoLineage'].unique().tolist()
@@ -703,7 +621,7 @@ for variant in variant_names:
             model = model_r
             start_weights_r = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, 1)
             model_r = model
-            
+
             if len(start_weights_c) != 0:              
               param_iter = iter(model_c.parameters())
               for weight_tensor in start_weights_c:
@@ -721,7 +639,7 @@ for variant in variant_names:
             # Classifier f1 evaluation
             # For correctly classified 1s, find MAE
             # save thes values in lists for later plotting
-
+                
             CF1, f11, MAE1, MAE2, pred, country_mask = eval_F1_MAE(edgeWeightsTE)
 
             # Convert 1s and 0s to True and False
