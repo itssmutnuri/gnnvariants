@@ -2,7 +2,8 @@
 """
 Code with country adjacency and travel restrictions. Updated with variable S
 
-Ablation: T = 3
+Ablation: 
+Attempt to use just the log of the prevalance ratio without S, using default T.
 """
 
 import numpy as np
@@ -147,8 +148,7 @@ edge_index = edge_index.long()
 
 # (optional) transpose edge_index to match the PyTorch Geometric format
 edge_index = edge_index.transpose(0, 1)
-
-# Load S and cap if needed
+#%% Load S and cap if needed
 def remove_outliers(data):
     q1 = np.nanpercentile(data, 25)
     q3 = np.nanpercentile(data, 75)
@@ -195,7 +195,6 @@ def edgeW_calc(df):
     edge_weights = torch.DoubleTensor(edge_weights)
     
     return edge_weights
-
 # Get the unique dates and pangoLineages in the DataFrame
 def process_data(df,T):
     #df['date'] = pd.to_datetime(df['date'])
@@ -216,7 +215,7 @@ def process_data(df,T):
         for pangoLineage in pangos: #pangoLineages:
             p_index = all_variants.index(pangoLineage)
             # Create the feat_matrix and target_matrix
-            feat_matrix = np.zeros((len(countries), T+1))
+            feat_matrix = np.zeros((len(countries), T))
             target_matrix = np.zeros((len(countries), 2))
             target_matrix[:,0] = -1 #Will never reach prevalence
             countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -256,10 +255,9 @@ def process_data(df,T):
                     si = temp_c['S'].values[-1]
               
                 log_prev_vals = np.log(prev_values_c + (10**-10))
-                appended_prev_si = np.append(log_prev_vals, si)
                 row_index = countries.index(c)
 
-                feat_matrix[row_index, : ] = appended_prev_si
+                feat_matrix[row_index, : ] = log_prev_vals
 
                 target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
                 
@@ -300,7 +298,7 @@ def process_data_test(df,T,d):
         p_index = all_variants.index(pangoLineage)
         si = S.S[p_index]
         # Create the feat_matrix and target_matrix
-        feat_matrix = np.zeros((len(countries), T+1))
+        feat_matrix = np.zeros((len(countries), T))
         target_matrix = np.zeros((len(countries), 2))
         target_matrix[:,0] = -1 #Will never reach prevalence
         countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -341,10 +339,10 @@ def process_data_test(df,T,d):
             
             
             log_prev_vals = np.log(prev_values_c + (10**-10))
-            appended_prev_si = np.append(log_prev_vals, si)
             row_index = countries.index(c)
 
-            feat_matrix[row_index, : ] = appended_prev_si
+            feat_matrix[row_index, : ] = log_prev_vals
+
             target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
             
             days_to_prev = target_vals['days_to_prev'].values
@@ -392,7 +390,6 @@ class GCN(torch.nn.Module):
         x1 = self.fc1(x2)
         return x1
         
-
 class EarlyStopper:
     def __init__(self, patience = 1, min_delta = 0):
         self.patience = patience
@@ -530,19 +527,18 @@ def append_to_csv(filepath, values, header=None):
         
         writer.writerow(values)
 
-T = 3
+T = 4
 
 # Generate the current timestamp for the entire run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "T3"
+ITERATION_NAME = "woS"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
 
 ERROR_FILE = 'status.csv'
-
 
 #Get a list of variants
 variant_names = data_GT['pangoLineage'].unique().tolist()
@@ -611,8 +607,8 @@ for variant in variant_names:
             torch.cuda.empty_cache()
             epochs = 100
             device = 'cpu'
-            model_r = GCN(node_features = T + 1).to(device)
-            model_c = GCN(node_features = T + 1).to(device)
+            model_r = GCN(node_features = T).to(device)
+            model_c = GCN(node_features = T).to(device)
             
             if len(start_weights_r) != 0:              
               param_iter = iter(model_r.parameters())

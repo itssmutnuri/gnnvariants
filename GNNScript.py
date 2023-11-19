@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Code with country adjacency and travel restrictions
+Code with country adjacency and travel restrictions. Updated with variable S
 
 Baseline Script
 """
@@ -293,7 +293,7 @@ def process_data_test(df,T,d):
     # batch each varaint group  and dont do this maybe?
     for pangoLineage in pangos: #pangoLineages:
         p_index = all_variants.index(pangoLineage)
-        si = S.S[p_index]
+        # si = S.S[p_index]
         # Create the feat_matrix and target_matrix
         feat_matrix = np.zeros((len(countries), T+1))
         target_matrix = np.zeros((len(countries), 2))
@@ -531,7 +531,7 @@ T = 4
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "GNN_CONTROLS_EDGES_ADJ_ONLY_NEW"
+ITERATION_NAME = "Baseline"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"

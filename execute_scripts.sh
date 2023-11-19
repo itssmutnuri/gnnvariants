@@ -15,19 +15,15 @@ execute_and_time() {
     seconds=$((elapsed_time % 60))
 
     # Append the timing info to times.txt
-    echo "$script_name: $minutes minutes $seconds seconds" >> times.txt
+    echo "$script_name: $minutes minutes $seconds seconds" >> Results/times.txt
 }
 
 # Initialize the times.txt with a header
-echo "Script Execution Timings:" > Results/times.txt
+# echo "Script Execution Timings:" > Results/times.txt
 
 # List of scripts to run
-# scripts=("GNNScript.py" 
-#         "Ablations/wosT2_GNNScript.py" "Ablations/wosT1_GNNScript.py"
-#         "Ablations/t1_GNNScript.py" "Ablations/t3_GNNScript.py" "Ablations/t4_GNNScript.py" 
-#         "Ablations/enc0_GNNScript.py" "Ablations/enc1_GNNScript.py" "Ablations/enc2_GNNScript.py" "Ablations/enc3a_GNNScript.py")
 
-scripts=("Ablations/t5_GNNScript.py" "Ablations/t6_GNNScript.py" "Ablations/t7_GNNScript.py" "Ablations/t8_GNNScript.py")
+scripts=("Ablations/t1_GNNScript.py" "Ablations/t2_GNNScript.py" "Ablations/t3_GNNScript.py")
 
 # Execute each script in the list and capture its timing
 for script in "${scripts[@]}"; do

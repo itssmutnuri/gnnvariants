@@ -2,7 +2,9 @@
 """
 Code with country adjacency and travel restrictions. Updated with variable S
 
-Ablation: T = 3
+Ablation: 
+Rather than just adding the corresponding S as a feature to a certain variant's snapshot, try encoding all S values and input that.
+Encoding used is a autoencoder with variable input size for retrospective S values which are encoded separately based on prevalent variants
 """
 
 import numpy as np
@@ -17,12 +19,16 @@ from datetime import date, timedelta, datetime
 from matplotlib import pyplot as plt
 import json
 import os
-#from csaps import csaps
+
+from sklearn.linear_model import LinearRegression
+
 import math
 import torch
 import scipy.io
 import torch
-from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout
+from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout,MSELoss
+import torch.optim as optim
+
 import torch.nn.functional as F
 from torch_geometric_temporal.nn.recurrent import DCRNN
 from tqdm import tqdm
@@ -147,8 +153,7 @@ edge_index = edge_index.long()
 
 # (optional) transpose edge_index to match the PyTorch Geometric format
 edge_index = edge_index.transpose(0, 1)
-
-# Load S and cap if needed
+#%% Load S and cap if needed
 def remove_outliers(data):
     q1 = np.nanpercentile(data, 25)
     q3 = np.nanpercentile(data, 75)
@@ -158,12 +163,101 @@ def remove_outliers(data):
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
     
-S = pd.read_csv(paths.PATH_GROWTH_RATES)
+# S = pd.read_csv(paths.PATH_GROWTH_RATES)
+
+
+def medianval(S_series):
+    """
+    Returns the median of the provided series.
+    """
+    return S_series.median()
+
+def linearval(S_series):
+    """
+    Fits a simple linear regression to the series data 
+    and returns the slope of the fitted line.
+    """
+    # Reshape the data to fit the linear model
+    X = np.arange(len(S_series)).reshape(-1, 1)
+    y = S_series.values
+    
+    # Create and fit the model
+    model = LinearRegression()
+    model.fit(X, y)
+    
+    # Get the slope (coefficient of the independent variable)
+    slope = model.coef_[0]
+    
+    return slope
+
+class AutoEncoder(torch.nn.Module):
+    
+    def __init__(self, input_size=1, encoded_size=1):
+        super(AutoEncoder, self).__init__()
+        self.encoder = Sequential(
+            Linear(input_size, 5),
+            ReLU(),
+            Linear(5, encoded_size)
+        )
+        self.decoder = Sequential(
+            Linear(encoded_size, 5),
+            ReLU(),
+            Linear(5, input_size)
+        )
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return encoded, decoded
+
+    @staticmethod
+    def encoder_block(S_tensor, input_size, encoded_size=1):
+        # Train the autoencoder
+        model = AutoEncoder(input_size=input_size, encoded_size=encoded_size).float()
+        criterion = MSELoss()
+        optimizer = optim.Adam(model.parameters(), lr=0.01)
+        for _ in tqdm(range(1000)):
+            _, decoded = model(S_tensor)
+            loss = criterion(decoded, S_tensor)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # Encode S values using the trained autoencoder
+        encoded, _ = model(S_tensor)
+        return encoded.detach().numpy()
+
+def sautoenc(S_series):
+    S_tensor = torch.tensor(S_series.values).float().unsqueeze(0)
+    encoded_value = AutoEncoder.encoder_block(S_tensor, len(S_series))
+    return encoded_value.mean()
+
+def vautoenc(S_series):
+    S_tensor = torch.tensor(S_series.values).float().unsqueeze(0)
+    encoded_value = AutoEncoder.encoder_block(S_tensor, len(S_series))
+    return encoded_value.mean()
+
+def encode(S, method=0):
+    """
+    Encodes the series based on the specified type/method.
+    """
+
+    S_series = S.S
+
+    # Use the 'type' to get the appropriate method from the dictionary
+    method_func = encodings.get(method)
+    
+    # If the method is not found, handle the error (for instance, return None or raise an exception)
+    if not method_func:
+        return medianval(S_series)
+    
+    # Call the method and return its result
+    return method_func(S_series)
+
 
 def edgeW_calc(df):
     weighted_mat = np.ones((len(countries),len(countries)))
       
-
     # sort by restriction lvls 0->4
     df = df.sort_values(by='international_travel_controls')
     
@@ -256,7 +350,7 @@ def process_data(df,T):
                     si = temp_c['S'].values[-1]
               
                 log_prev_vals = np.log(prev_values_c + (10**-10))
-                appended_prev_si = np.append(log_prev_vals, si)
+                appended_prev_si = np.append(log_prev_vals, si) # si is global value
                 row_index = countries.index(c)
 
                 feat_matrix[row_index, : ] = appended_prev_si
@@ -298,7 +392,7 @@ def process_data_test(df,T,d):
     # batch each varaint group  and dont do this maybe?
     for pangoLineage in pangos: #pangoLineages:
         p_index = all_variants.index(pangoLineage)
-        si = S.S[p_index]
+        # si = S.S[p_index]
         # Create the feat_matrix and target_matrix
         feat_matrix = np.zeros((len(countries), T+1))
         target_matrix = np.zeros((len(countries), 2))
@@ -331,17 +425,17 @@ def process_data_test(df,T,d):
             # If no prev values were found, fill the row with 0s
             if len(prev_values_c) == 0:
               prev_values_c = np.zeros(T)
-              si = 0
+            #   si = 0
             elif len(prev_values_c) < T:
               prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
-              si = temp_c['S'].values[-1]
-            else:
-              si = temp_c['S'].values[-1]
+            #   si = temp_c['S'].values[-1]
+            # else:
+            #   si = temp_c['S'].values[-1]
             
             
             
             log_prev_vals = np.log(prev_values_c + (10**-10))
-            appended_prev_si = np.append(log_prev_vals, si)
+            appended_prev_si = np.append(log_prev_vals, si) # si is global value
             row_index = countries.index(c)
 
             feat_matrix[row_index, : ] = appended_prev_si
@@ -391,7 +485,6 @@ class GCN(torch.nn.Module):
         #Might need normalization here since we concatenate a value between 0 and 1
         x1 = self.fc1(x2)
         return x1
-        
 
 class EarlyStopper:
     def __init__(self, patience = 1, min_delta = 0):
@@ -530,19 +623,30 @@ def append_to_csv(filepath, values, header=None):
         
         writer.writerow(values)
 
-T = 3
+T = 4
 
 # Generate the current timestamp for the entire run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "T3"
+encodings = {
+        0: medianval,
+        1: linearval,
+        2: sautoenc,
+        3: vautoenc
+    }
+
+TYPE = 3
+IS_DEBUG = True
+
+ITERATION_NAME = f"eS_{encodings[TYPE].__name__}"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
 
 ERROR_FILE = 'status.csv'
 
+si = encode(S, method=TYPE)
 
 #Get a list of variants
 variant_names = data_GT['pangoLineage'].unique().tolist()

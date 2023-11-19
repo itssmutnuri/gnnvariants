@@ -2,7 +2,7 @@
 """
 Code with country adjacency and travel restrictions. Updated with variable S
 
-Ablation: T = 3
+Ablation: T = 2
 """
 
 import numpy as np
@@ -530,13 +530,13 @@ def append_to_csv(filepath, values, header=None):
         
         writer.writerow(values)
 
-T = 3
+T = 2
 
 # Generate the current timestamp for the entire run
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "T3"
+ITERATION_NAME = "T2"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
