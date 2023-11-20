@@ -4,7 +4,7 @@ Code with country adjacency and travel restrictions. Updated with variable S
 
 Ablation: 
 Rather than just adding the corresponding S as a feature to a certain variant's snapshot, try encoding all S values and input that.
-Encoding used is a autoencoder with variable input size for retrospective S values which are encoded separately based on prevalent variants
+Encoding used is a autoencoder with variable input size for retrospective S values which are embedded into the GNN
 """
 
 import numpy as np
@@ -153,7 +153,8 @@ edge_index = edge_index.long()
 
 # (optional) transpose edge_index to match the PyTorch Geometric format
 edge_index = edge_index.transpose(0, 1)
-#%% Load S and cap if needed
+
+# Load S and cap if needed
 def remove_outliers(data):
     q1 = np.nanpercentile(data, 25)
     q3 = np.nanpercentile(data, 75)
@@ -162,7 +163,6 @@ def remove_outliers(data):
     upper_bound = q3 + 1.5 * iqr
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
-
 
 def medianval(S_series):
     """
@@ -716,8 +716,6 @@ PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
 
 ERROR_FILE = 'status.csv'
-
-
 
 #Get a list of variants
 variant_names = data_GT['pangoLineage'].unique().tolist()

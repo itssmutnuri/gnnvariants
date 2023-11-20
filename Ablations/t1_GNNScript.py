@@ -117,7 +117,7 @@ adj_mat = np.eye(len(countries))
 
 #Aruba are islands and go to the else since they have no adj
 
-with open('data/country_adj_fullname.json', 'r') as json_file:
+with open(paths.PATH_COUNTRY_ADJ, 'r') as json_file:
   data_json = json.load(json_file)
   for i in range(len(countries)):
       if countries[i] == "Aruba" or countries[i] == "Fiji" or countries[i] == "Guadeloupe" or countries[i] == "Iceland" or countries[i] == "Jamaica" or countries[i] == "Maldives" or countries[i] == "Mauritius" or countries[i] == "New Zealand" or countries[i] =="Seychelles":
