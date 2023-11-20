@@ -153,8 +153,7 @@ edge_index = edge_index.long()
 
 # (optional) transpose edge_index to match the PyTorch Geometric format
 edge_index = edge_index.transpose(0, 1)
-
-# Load S and cap if needed
+#%% Load S and cap if needed
 def remove_outliers(data):
     q1 = np.nanpercentile(data, 25)
     q3 = np.nanpercentile(data, 75)
@@ -164,29 +163,6 @@ def remove_outliers(data):
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
 
-def medianval(S_series):
-    """
-    Returns the median of the provided series.
-    """
-    return S_series.median()
-
-def linearval(S_series):
-    """
-    Fits a simple linear regression to the series data 
-    and returns the slope of the fitted line.
-    """
-    # Reshape the data to fit the linear model
-    X = np.arange(len(S_series)).reshape(-1, 1)
-    y = S_series.values
-    
-    # Create and fit the model
-    model = LinearRegression()
-    model.fit(X, y)
-    
-    # Get the slope (coefficient of the independent variable)
-    slope = model.coef_[0]
-    
-    return slope
 
 class AutoEncoder(torch.nn.Module):
     
@@ -224,33 +200,16 @@ class AutoEncoder(torch.nn.Module):
         # Encode S values using the trained autoencoder
         encoded, _ = model(S_tensor)
         return encoded.detach().numpy()
+    
+def encode(S):
 
-def sautoenc(S_series):
-    S_tensor = torch.tensor(S_series.values).float().unsqueeze(0)
+    S_series = S.iloc[0]
+    print(type(S_series))
+    print(S_series)
+
+    S_tensor = torch.tensor(S_series).float().unsqueeze(0)
     encoded_value = AutoEncoder.encoder_block(S_tensor, len(S_series))
     return encoded_value.mean()
-
-def vautoenc(S_series):
-    S_tensor = torch.tensor(S_series.values).float().unsqueeze(0)
-    encoded_value = AutoEncoder.encoder_block(S_tensor, len(S_series))
-    return encoded_value.mean()
-
-def encode(S, method=0):
-    """
-    Encodes the series based on the specified type/method.
-    """
-
-    S_series = S.S
-
-    # Use the 'type' to get the appropriate method from the dictionary
-    method_func = encodings.get(method)
-    
-    # If the method is not found, handle the error (for instance, return None or raise an exception)
-    if not method_func:
-        return medianval(S_series)
-    
-    # Call the method and return its result
-    return method_func(S_series)
 
 def edgeW_calc(df):
     weighted_mat = np.ones((len(countries),len(countries)))
@@ -373,8 +332,8 @@ def process_data(df,T):
         for pangoLineage in pangos: #pangoLineages:
             p_index = all_variants.index(pangoLineage)
 
-            filtered_s = s_values[(s_values['date'] == d and s_values['pangoLineage'] == pangoLineage)]
-            si = encode(filtered_s['list_of_s_values'], method=TYPE) # pass in the list of S values for encoding
+            filtered_s = s_values[(s_values['date'] == d) & (s_values['pangoLineage'] == pangoLineage)]
+            si = encode(filtered_s['list_of_s_values']) # pass in the list of S values for encoding
 
             # Create the feat_matrix and target_matrix
             feat_matrix = np.zeros((len(countries), T+1))
@@ -462,8 +421,8 @@ def process_data_test(df,T,d):
     for pangoLineage in pangos: #pangoLineages:
         p_index = all_variants.index(pangoLineage)
         
-        filtered_s = s_values[(s_values['date'] == d and s_values['pangoLineage'] == pangoLineage)]
-        si = encode(filtered_s['list_of_s_values'], method=TYPE) # pass in the list of S values for encoding
+        filtered_s = s_values[(s_values['date'] == d) & (s_values['pangoLineage'] == pangoLineage)]
+        si = encode(filtered_s['list_of_s_values']) # pass in the list of S values for encoding
 
 
         # Create the feat_matrix and target_matrix
@@ -700,17 +659,7 @@ T = 4
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-encodings = {
-        0: medianval,
-        1: linearval,
-        2: sautoenc,
-        3: vautoenc
-    }
-
-TYPE = 3
-IS_DEBUG = True
-
-ITERATION_NAME = f"eS_{encodings[TYPE].__name__}"
+ITERATION_NAME = "encVar"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
@@ -721,7 +670,7 @@ ERROR_FILE = 'status.csv'
 variant_names = data_GT['pangoLineage'].unique().tolist()
 print(variant_names)
 
-IS_DEBUG = False
+IS_DEBUG = True
 
 for variant in variant_names:
 
