@@ -102,6 +102,7 @@ IATA_country = np.transpose(np.array([list(airports[3]), list(airports[0])]))
 
 rou = np.transpose(np.array([list(routes[3]), list(routes[5])]))
 route = np.empty(rou.shape, dtype=np.dtype('U100'))
+
 for i in range(len(rou)):
     try:
         while(np.where(IATA_country[:,1]==rou[i][1])[0].size==0) or (np.where(IATA_country[:,1]==rou[i][0])[0].size==0) or (rou[i][0]=='\\N') or (rou[i][1]=='\\N'):
@@ -162,54 +163,6 @@ def remove_outliers(data):
     upper_bound = q3 + 1.5 * iqr
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
-
-
-class AutoEncoder(torch.nn.Module):
-    
-    def __init__(self, input_size=1, encoded_size=1):
-        super(AutoEncoder, self).__init__()
-        self.encoder = Sequential(
-            Linear(input_size, 5),
-            ReLU(),
-            Linear(5, encoded_size)
-        )
-        self.decoder = Sequential(
-            Linear(encoded_size, 5),
-            ReLU(),
-            Linear(5, input_size)
-        )
-
-    def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return encoded, decoded
-
-    @staticmethod
-    def encoder_block(S_tensor, input_size, encoded_size=1):
-        # Train the autoencoder
-        model = AutoEncoder(input_size=input_size, encoded_size=encoded_size).float()
-        criterion = MSELoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.01)
-        for _ in tqdm(range(1000)):
-            _, decoded = model(S_tensor)
-            loss = criterion(decoded, S_tensor)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        # Encode S values using the trained autoencoder
-        encoded, _ = model(S_tensor)
-        return encoded.detach().numpy()
-    
-def encode(S):
-
-    S_series = S.iloc[0]
-    print(type(S_series))
-    print(S_series)
-
-    S_tensor = torch.tensor(S_series).float().unsqueeze(0)
-    encoded_value = AutoEncoder.encoder_block(S_tensor, len(S_series))
-    return encoded_value.mean()
 
 def edgeW_calc(df):
     weighted_mat = np.ones((len(countries),len(countries)))
@@ -335,10 +288,9 @@ def process_data(df,T):
             p_index = all_variants.index(pangoLineage)
 
             filtered_s = s_values[(s_values['date'] == d) & (s_values['pangoLineage'] == pangoLineage)]
-            si = encode(filtered_s['list_of_s_values']) # pass in the list of S values for encoding
 
             # Create the feat_matrix and target_matrix
-            feat_matrix = np.zeros((len(countries), T+1))
+            feat_matrix = np.zeros((len(countries), T))
             target_matrix = np.zeros((len(countries), 2))
             target_matrix[:,0] = -1 #Will never reach prevalence
             countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -368,20 +320,14 @@ def process_data(df,T):
                 # If no prev values were found, fill the row with 0s
                 if len(prev_values_c) == 0:
                     prev_values_c = np.zeros(T)
-                    # si = 0
-
                 # If not enough prev values were found, pad with 0s
                 elif len(prev_values_c) < T:
                     prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
-                    # si = temp_c['S'].values[-1]
-                # else:
-                    # si = temp_c['S'].values[-1]
               
                 log_prev_vals = np.log(prev_values_c + (10**-10))
-                appended_prev_si = np.append(log_prev_vals, si) # si is global value
                 row_index = countries.index(c)
 
-                feat_matrix[row_index, : ] = appended_prev_si
+                feat_matrix[row_index, : ] = log_prev_vals
 
                 target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
                 
@@ -429,11 +375,9 @@ def process_data_test(df,T,d):
         p_index = all_variants.index(pangoLineage)
         
         filtered_s = s_values[(s_values['date'] == d) & (s_values['pangoLineage'] == pangoLineage)]
-        si = encode(filtered_s['list_of_s_values']) # pass in the list of S values for encoding
-
 
         # Create the feat_matrix and target_matrix
-        feat_matrix = np.zeros((len(countries), T+1))
+        feat_matrix = np.zeros((len(countries), T))
         target_matrix = np.zeros((len(countries), 2))
         target_matrix[:,0] = -1 #Will never reach prevalence
         countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -464,18 +408,13 @@ def process_data_test(df,T,d):
             # If no prev values were found, fill the row with 0s
             if len(prev_values_c) == 0:
               prev_values_c = np.zeros(T)
-            #   si = 0
             elif len(prev_values_c) < T:
               prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
-            #   si = temp_c['S'].values[-1]
-            # else:
-            #   si = temp_c['S'].values[-1]
             
             log_prev_vals = np.log(prev_values_c + (10**-10))
-            appended_prev_si = np.append(log_prev_vals, si) # si is global value
             row_index = countries.index(c)
 
-            feat_matrix[row_index, : ] = appended_prev_si
+            feat_matrix[row_index, : ] = log_prev_vals
             target_vals = prev_values[(prev_values['date'] == d) & (prev_values['country'] == c)]
             
             days_to_prev = target_vals['days_to_prev'].values
@@ -499,26 +438,32 @@ def process_data_test(df,T,d):
     
     return dataset, edge_weights, svalues_list
 
+def preprocess_s_values(s_values):
+    # If s_values is a NumPy array of objects (like lists), flatten and convert
+    if isinstance(s_values, np.ndarray) and s_values.dtype == np.object_:
+        # Flatten each item in s_values and convert to a float type
+        s_values = np.array([item for sublist in s_values for item in sublist], dtype=np.float32)
+
+    return s_values
+
 # Define GNN
 class GCN(torch.nn.Module):
     def __init__(self, node_features):
         super(GCN,self).__init__()
-        self.conv1 = GCNConv(node_features + 1, 32)
+        self.encoded_size = 1
+        self.conv1 = GCNConv(node_features + self.encoded_size, 32)
         self.conv2 = GCNConv(32, 16)
         self.norm1 = norm.GraphNorm(32)
         self.norm2 = norm.GraphNorm(16)
         self.fc1 = torch.nn.Linear(16, 1)
 
+    def forward(self, data, edge_weight, s_valuesdf, norm = False):
+        s_values = s_valuesdf['list_of_s_values'].values
 
-    def forward(self, data, edge_weight, s_values, norm = False):
-        
-        if not isinstance(s_values, torch.Tensor):
-            s_values = torch.tensor(s_values, dtype=torch.float32)
+        s_values = preprocess_s_values(s_values)
+        s_values = torch.tensor(s_values, dtype=torch.float32)
 
-        # Ensure s_values is on the same device as the model
-        s_values = s_values.to(x.device)
-
-        s_values_size = s_values.shape[1]
+        s_values_size = len(s_values)
 
         # Dynamically create layers
         s_fc1 = torch.nn.Linear(s_values_size, s_values_size // 2)
@@ -529,6 +474,9 @@ class GCN(torch.nn.Module):
         # Process s_values
         s_encoded = F.relu(s_fc1(s_values))
         s_encoded = s_fc2(s_encoded)
+
+        s_encoded = s_encoded.unsqueeze(0)  # Add an extra dimension
+        s_encoded = s_encoded.repeat(x.size(0), 1)
 
         # Concatenate s_encoded with node features
         x = torch.cat([x, s_encoded], dim=1)
@@ -572,6 +520,7 @@ class EarlyStopper:
 # Train GNN
 def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T, edge_weights_V, svalues_T, svalues_V, reg = 1):
     torch.cuda.empty_cache()
+
     for epoch in tqdm(range(epochs)):
         model.train()
         cost_1 = torch.tensor(0).to(device)
@@ -632,6 +581,9 @@ def eval_F1_MAE(edge_weights_Te, svalues_Te):
     CF = 0
     count = 0
     cost_median = 0
+
+    print(len(edge_weights_Te), len(svalues_Te))
+
     with torch.no_grad():
         for time, snapshot in enumerate(test_dataset): 
             EW = edge_weights_Te[time]
@@ -692,18 +644,21 @@ T = 4
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "encVar"
+ITERATION_NAME = "embVar"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
 
 ERROR_FILE = 'status.csv'
 
-#Get a list of variants
-variant_names = data_GT['pangoLineage'].unique().tolist()
-print(variant_names)
+IS_DEBUG = False
 
-IS_DEBUG = True
+if IS_DEBUG:
+    variant_names = ['20A.S.126A']
+else:
+    #Get a list of variants
+    variant_names = data_GT['pangoLineage'].unique().tolist()
+    print(variant_names)
 
 for variant in variant_names:
 
@@ -769,8 +724,8 @@ for variant in variant_names:
             torch.cuda.empty_cache()
             epochs = 100
             device = 'cpu'
-            model_r = GCN(node_features = T + 1).to(device)
-            model_c = GCN(node_features = T + 1).to(device)
+            model_r = GCN(node_features = T).to(device)
+            model_c = GCN(node_features = T).to(device)
             
             if len(start_weights_r) != 0:              
               param_iter = iter(model_r.parameters())
@@ -795,7 +750,7 @@ for variant in variant_names:
             optimizer = torch.optim.Adam(model_c.parameters(), lr=0.01)
             early_stopper = EarlyStopper(patience=3,min_delta=0.05)
             model = model_c
-            start_weights_c = train(T,epochs,optimizer,early_stopper, weight_pos, train_edges, val_edges, svalues_test , 0)
+            start_weights_c = train(T,epochs,optimizer,early_stopper, weight_pos, train_edges, val_edges, svalues_train, svalues_val , 0)
             model_c = model
 
             # Evaluate on date d USING GT:
