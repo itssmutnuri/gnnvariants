@@ -318,6 +318,7 @@ def process_data(df,T):
 
     s_values = get_dominant_variants_s_vallist(df)
 
+    svalues_list = []
 
     # Loop over each date and pangoLineage (each gives us a snapshot)
     for d in dates:
@@ -325,6 +326,7 @@ def process_data(df,T):
         pangos = pangos['pangoLineage'].unique()
         #print(restrictions)       
         controls = restrictions[restrictions['date'] == d]
+
         
         EW = edgeW_calc(controls)
         # what if we have a ariant not present at a given dat, but is at other dates?
@@ -397,17 +399,22 @@ def process_data(df,T):
             feat_mats.append(feat_matrix)
             target_mats.append(target_matrix)
             edge_weights.append(EW)
+
+            svalues_list.append(filtered_s)
     dataset = StaticGraphTemporalSignal(edge_index = edge_index.numpy().T, edge_weight = edge_index.numpy().T,
                                         features = feat_mats, targets = target_mats)
     
-    return dataset,edge_weights
+    # flatten s values.
+    return dataset, edge_weights, svalues_list
         
 def process_data_test(df,T,d):
     
-    #Here get the passed 14 days of data (interpolated features)
+    # Here get the passed 14 days of data (interpolated features)
     
     feat_mats = []
     target_mats = []
+
+    svalues_list = []
 
     s_values = get_dominant_variants_s_vallist(df)
 
@@ -484,24 +491,48 @@ def process_data_test(df,T,d):
         feat_mats.append(feat_matrix)
         target_mats.append(target_matrix)
         edge_weights.append(EW)
+
+        svalues_list.append(filtered_s)
     
     dataset = StaticGraphTemporalSignal(edge_index = edge_index.numpy().T, edge_weight = edge_index.numpy().T,
                                         features = feat_mats, targets = target_mats)
     
-    return dataset,edge_weights
+    return dataset, edge_weights, svalues_list
 
 # Define GNN
 class GCN(torch.nn.Module):
-    def __init__(self,node_features):
+    def __init__(self, node_features):
         super(GCN,self).__init__()
-        self.conv1 = GCNConv(node_features, 32)
+        self.conv1 = GCNConv(node_features + 1, 32)
         self.conv2 = GCNConv(32, 16)
         self.norm1 = norm.GraphNorm(32)
         self.norm2 = norm.GraphNorm(16)
         self.fc1 = torch.nn.Linear(16, 1)
 
-    def forward(self, data, edge_weight, norm = False):
+
+    def forward(self, data, edge_weight, s_values, norm = False):
+        
+        if not isinstance(s_values, torch.Tensor):
+            s_values = torch.tensor(s_values, dtype=torch.float32)
+
+        # Ensure s_values is on the same device as the model
+        s_values = s_values.to(x.device)
+
+        s_values_size = s_values.shape[1]
+
+        # Dynamically create layers
+        s_fc1 = torch.nn.Linear(s_values_size, s_values_size // 2)
+        s_fc2 = torch.nn.Linear(s_values_size // 2, self.encoded_size)
+
         x, edge_index = data.x, data.edge_index
+
+        # Process s_values
+        s_encoded = F.relu(s_fc1(s_values))
+        s_encoded = s_fc2(s_encoded)
+
+        # Concatenate s_encoded with node features
+        x = torch.cat([x, s_encoded], dim=1)
+
         x1 = self.conv1(x, edge_index, edge_weight)
         x = F.leaky_relu(x1)
         if norm:
@@ -539,7 +570,7 @@ class EarlyStopper:
         return False
             
 # Train GNN
-def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weights_V, reg = 1):
+def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T, edge_weights_V, svalues_T, svalues_V, reg = 1):
     torch.cuda.empty_cache()
     for epoch in tqdm(range(epochs)):
         model.train()
@@ -547,8 +578,8 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
         cost = torch.tensor(0).to(device)
         for time, snapshot in enumerate(train_dataset):
             EW = edge_weights_T[time]
-            y_hat = model(snapshot,EW)
-            
+            svalues = svalues_T[time]
+            y_hat = model(snapshot, EW, svalues)
             if reg:
               y_hat = F.relu(y_hat)
               mask = snapshot.y[:,1].detach().numpy() == 1 #Need to create a mask for nodes to train on
@@ -569,12 +600,13 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
         with torch.no_grad():
             for time, snapshot in enumerate(val_dataset):
                 EW = edge_weights_V[time]
+                svalues = svalues_V[time]
                 if reg:
-                  y_hat = model(snapshot,EW)
+                  y_hat = model(snapshot, EW, svalues)
                   mask = snapshot.y[:,1].detach().numpy() == 1
                   val_cost = val_cost + torch.mean((y_hat[mask].squeeze()-snapshot.y[mask,0].to(device))**2)
                 else:
-                  y_hat = model(snapshot,EW, True)
+                  y_hat = model(snapshot,EW, svalues, True)
                   val_cost = val_cost + F.binary_cross_entropy_with_logits(y_hat.squeeze(), snapshot.y[:,1],pos_weight=(weight_pos))
                   
             val_cost = val_cost / (time+1)
@@ -592,7 +624,7 @@ def train(T,epochs,optimizer,early_stopper,weight_pos,edge_weights_T,edge_weight
     return early_stopper.weights
         
 # Test GNN
-def eval_F1_MAE(edge_weights_Te):
+def eval_F1_MAE(edge_weights_Te, svalues_Te):
     model_r.eval()
     model_c.eval()
     cost_1 = torch.tensor(0).to(device)
@@ -603,7 +635,8 @@ def eval_F1_MAE(edge_weights_Te):
     with torch.no_grad():
         for time, snapshot in enumerate(test_dataset): 
             EW = edge_weights_Te[time]
-            y_hat = model_c(snapshot,EW)
+            svalues = svalues_Te[time]
+            y_hat = model_c(snapshot, EW, svalues)
             pred = F.sigmoid(y_hat)
             CF = CF + confusion_matrix(snapshot.y[:,1].detach().numpy(), np.round((pred.squeeze().detach().numpy())))
             cost_1 = cost_1 + f1_score(snapshot.y[:,1].detach().numpy(), np.round((pred.squeeze().detach().numpy())), average = 'macro')
@@ -615,7 +648,7 @@ def eval_F1_MAE(edge_weights_Te):
             if np.any(correct_idx):
                 ## NEED TO PUT ONE MORE HERE TO SEE WHICH NODES TO PREDICT FOR
                 count += 1
-                y_hat = model_r(snapshot,EW)
+                y_hat = model_r(snapshot, EW, svalues)
                 pred = y_hat.squeeze()[correct_idx]
                 cost = cost + torch.mean(torch.abs(((np.ceil(np.maximum(pred,1)/14)*14)-snapshot.y[correct_idx,0])))
                 cost_median = cost_median + torch.median(torch.abs(((np.ceil(np.maximum(pred,1)/14)*14)-snapshot.y[correct_idx,0])))
@@ -712,7 +745,7 @@ for variant in variant_names:
             if len(df_GT_Te) ==0:
                 continue
                 
-            dataset,edgeWeights = process_data(df,T) 
+            dataset, edgeWeights, svalues = process_data(df, T) 
             
             #validate on approx last month of data
             100/dataset.snapshot_count
@@ -720,8 +753,11 @@ for variant in variant_names:
             LL = len(train_dataset.targets)
             train_edges = edgeWeights[:LL]
             val_edges = edgeWeights[LL:]
+
+            svalues_train = svalues[:LL]
+            svalues_val = svalues[LL:]
             
-            test_dataset, edgeWeightsTE = process_data_test(df_GT_Te,T,d)
+            test_dataset, edgeWeightsTE, svalues_test = process_data_test(df_GT_Te,T,d)
             #Find class weights
             all_labels = np.concatenate(train_dataset.targets)
             classes, classes_counts = np.unique(all_labels[:,1], return_counts = True)
@@ -746,7 +782,7 @@ for variant in variant_names:
             optimizer = torch.optim.Adam(model_r.parameters(), lr=0.05)
             early_stopper = EarlyStopper(patience=3,min_delta=5)
             model = model_r
-            start_weights_r = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, 1)
+            start_weights_r = train(T, epochs, optimizer, early_stopper, weight_pos, train_edges, val_edges, svalues_train, svalues_val, 1)
             model_r = model
 
             if len(start_weights_c) != 0:              
@@ -759,7 +795,7 @@ for variant in variant_names:
             optimizer = torch.optim.Adam(model_c.parameters(), lr=0.01)
             early_stopper = EarlyStopper(patience=3,min_delta=0.05)
             model = model_c
-            start_weights_c = train(T,epochs,optimizer,early_stopper, weight_pos,train_edges,val_edges, 0)
+            start_weights_c = train(T,epochs,optimizer,early_stopper, weight_pos, train_edges, val_edges, svalues_test , 0)
             model_c = model
 
             # Evaluate on date d USING GT:
@@ -767,7 +803,7 @@ for variant in variant_names:
             # For correctly classified 1s, find MAE
             # save thes values in lists for later plotting
                 
-            CF1, f11, MAE1, MAE2, pred, country_mask = eval_F1_MAE(edgeWeightsTE)
+            CF1, f11, MAE1, MAE2, pred, country_mask = eval_F1_MAE(edgeWeightsTE, svalues_test)
 
             # Convert 1s and 0s to True and False
             bool_country = [bool(val) for val in country_mask]
