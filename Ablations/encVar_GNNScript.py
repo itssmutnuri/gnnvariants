@@ -670,6 +670,8 @@ print(variant_names)
 
 IS_DEBUG = False
 
+# variant_names = ['23D.Omicron', '23E.Omicron', '23F.Omicron']
+
 for variant in variant_names:
 
     print(f" ======================== RUNNING FOR {variant} ======================== ")
