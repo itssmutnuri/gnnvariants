@@ -1,5 +1,1 @@
-Script Execution Timings:
-GNNScript.py: 184 minutes 8 seconds
-Ablations/t1_GNNScript.py: 125 minutes 38 seconds
-Ablations/t2_GNNScript.py: 135 minutes 39 seconds
-Ablations/t3_GNNScript.py: 127 minutes 31 seconds
+GNNScript_timed.py: 7 minutes 18 seconds

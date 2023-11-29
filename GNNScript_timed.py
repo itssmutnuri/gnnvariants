@@ -2,7 +2,7 @@
 """
 Code with country adjacency and travel restrictions. Updated with variable S
 
-Baseline Script
+Baseline Script, timed and only run for the last timestep (variant)
 """
 
 import numpy as np
@@ -532,7 +532,7 @@ T = 4
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "Baseline"
+ITERATION_NAME = "tBaseline"
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
@@ -541,8 +541,8 @@ ERROR_FILE = 'status.csv'
 
 
 #Get a list of variants
-variant_names = data_GT['pangoLineage'].unique().tolist()
-print(variant_names)
+# variant_names = data_GT['pangoLineage'].unique().tolist()
+# print(variant_names)
 
 IS_DEBUG = False
 
@@ -584,12 +584,10 @@ for variant in variant_names:
 
 
     for d in dates: # retrospective dates
-
-        preproc_time = 0
-        training_time = 0
-        eval_time = 0
-
         try:
+            preproc_time = 0
+            training_time = 0
+            eval_time = 0
 
             df = time_data[time_data['date']< (d - pd.Timedelta(days=T-1))] #Retro TRAINING data
             #One timestep or all timesteps for testing? && PER VARIANT
@@ -646,7 +644,7 @@ for variant in variant_names:
             train_end = time.time()
 
             train_time = train_end - train_start 
-            train_times = train_time.append(train_time)
+            training_times.append(train_time)
 
             model_r = model
 
