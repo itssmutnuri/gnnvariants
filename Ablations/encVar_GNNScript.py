@@ -153,7 +153,8 @@ edge_index = edge_index.long()
 
 # (optional) transpose edge_index to match the PyTorch Geometric format
 edge_index = edge_index.transpose(0, 1)
-#%% Load S and cap if needed
+
+# Load S and cap if needed
 def remove_outliers(data):
     q1 = np.nanpercentile(data, 25)
     q3 = np.nanpercentile(data, 75)
@@ -162,7 +163,6 @@ def remove_outliers(data):
     upper_bound = q3 + 1.5 * iqr
     clean_data = data[(data >= lower_bound) & (data <= upper_bound)].dropna()
     return clean_data
-
 
 class AutoEncoder(torch.nn.Module):
     
@@ -204,8 +204,6 @@ class AutoEncoder(torch.nn.Module):
 def encode(S):
 
     S_series = S.iloc[0]
-    print(type(S_series))
-    print(S_series)
 
     S_tensor = torch.tensor(S_series).float().unsqueeze(0)
     encoded_value = AutoEncoder.encoder_block(S_tensor, len(S_series))
@@ -671,6 +669,8 @@ variant_names = data_GT['pangoLineage'].unique().tolist()
 print(variant_names)
 
 IS_DEBUG = False
+
+# variant_names = ['23D.Omicron', '23E.Omicron', '23F.Omicron']
 
 for variant in variant_names:
 
