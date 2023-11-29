@@ -23,7 +23,7 @@ execute_and_time() {
 
 # List of scripts to run
 
-scripts=("Ablations/t1_GNNScript.py" "Ablations/t2_GNNScript.py" "Ablations/t3_GNNScript.py")
+scripts=("GNNScript_timed.py")
 
 # Execute each script in the list and capture its timing
 for script in "${scripts[@]}"; do
