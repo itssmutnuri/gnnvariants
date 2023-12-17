@@ -1,0 +1,24 @@
+{
+    "is_graph": true,
+    "ADJ_bool": true,
+    "Flights_bool": false,
+    "self_loops": true,
+    "EW_bool": true,
+    "topX_bool": false,
+    "topX_C": 60,
+    "dom_thresh": 0.3333,
+    "use_r": true,
+    "use_S": true,
+    "min_epochs": 3,
+    "max_epochs": 100,
+    "T": 4,
+    "reg_bool": true,
+    "early_stopper_patience": 3,
+    "early_stopper_delta": 5,
+    "variants_path": "data/all_vars21_clustered_NEW.csv",
+    "countries_path": "data/countries_clustered.csv",
+    "device": "cpu",
+    "ITERATION_NAME": "GNN_Test",
+    "IS_DEBUG": false
+  }
+  

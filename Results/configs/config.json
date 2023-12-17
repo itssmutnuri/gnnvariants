@@ -1,0 +1,6 @@
+{
+    "T": 1,
+    "variants": ["22A.Omicron", "23B.Omicron", "23F.Omicron"],
+    "IS_DEBUG": true,
+    "test_var": false
+}
