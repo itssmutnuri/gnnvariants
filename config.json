@@ -19,6 +19,6 @@
     "countries_path": "data/countries_clustered.csv",
     "device": "cpu",
     "ITERATION_NAME": "GNN_Test",
-    "IS_DEBUG": false
+    "IS_DEBUG": true
   }
   

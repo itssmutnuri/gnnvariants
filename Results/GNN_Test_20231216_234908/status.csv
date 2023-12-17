@@ -1,0 +1,16 @@
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-08-03T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-08-17T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-08-31T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-09-14T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-09-28T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-10-12T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-10-26T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-11-09T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-11-23T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-12-07T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2020-12-21T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2021-01-04T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2021-01-18T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2021-02-01T00:00:00.000000000
+ERROR,20A.EU1,edgeW_calc() missing 1 required positional argument: 'edge_index' with dates 2021-02-15T00:00:00.000000000
+SUCCESS,20A.EU1,None

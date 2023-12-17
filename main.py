@@ -63,15 +63,14 @@ if dom_thresh == 1/9:
     data_path = paths.PATH_PROCESSED_THRES_1_9th
 elif dom_thresh == 0.25:
     data_path = paths.PATH_PROCESSED_THRES_0_25
-elif dom_thresh == 1/3:
+elif dom_thresh == 0.3333:
     data_path = paths.PATH_PROCESSED_THRES_1_3
 elif dom_thresh == 0.5:
     data_path = paths.PATH_PROCESSED_THRES_0_5
 elif dom_thresh == 1:
     data_path = paths.PATH_PROCESSED_THRES_1
 else:
-  raise ValueError("Invalid option. Please choose a valid option for dom_thresh: [1/9,0.25,1/3,0.5,1].")            
-            
+  raise ValueError("Invalid threshold. Please choose a valid option for dom_thresh: [1/9,0.25,0.3333,0.5,1].")            
             
 #Load GT data
 time_data = pd.read_csv(data_path)
@@ -192,7 +191,9 @@ if is_graph:
 S = pd.read_csv(paths.PATH_GROWTH_RATES)
 
 # use partial to assign all args except the df value. this is done when processing.
-partial_edgeW_calc = partial(edgeW_calc, countries=countries, adj_mat=adj_mat, EW_bool=EW_bool)
+partial_edgeW_calc = partial(edgeW_calc, countries=countries, 
+                                          adj_mat=adj_mat, EW_bool=EW_bool,
+                                          edge_index = edge_index)
 
 
 # Train model

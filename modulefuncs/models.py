@@ -22,7 +22,6 @@ import torch.optim.lr_scheduler as sch
 import math
 import torch
 import scipy.io
-import torch
 from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout
 import torch.nn.functional as F
 from torch_geometric_temporal.nn.recurrent import DCRNN
@@ -155,7 +154,7 @@ class GRUs(torch.nn.Module):
 
 
 #MLP
-class MLPs(nn.Module):
+class MLPs(torch.nn.Module):
     def __init__(self, input_size, hidden_sizes, output_size):
         super(MLPs, self).__init__()
         
