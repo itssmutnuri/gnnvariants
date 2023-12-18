@@ -17,7 +17,7 @@ The main script, main.py, is the entry point for your project. Execute it using 
 ```bash
 python main.py
 Ensure you have activated the Conda environment (conda activate projectGNN) before running the script.
-
+```
 ## Configuration
 All variable configurations are specified in the config.json file. Adjust the values in this file according to your requirements.
 
