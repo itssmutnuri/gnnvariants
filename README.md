@@ -7,7 +7,7 @@ To set up the environment for the GNN Variants project, use the provided `enviro
 ```bash
 conda env create -f environment.yml
 conda activate projectGNN
-
+```
 
 This will create a Conda environment named projectGNN with the specified dependencies.
 
@@ -25,4 +25,4 @@ All variable configurations are specified in the config.json file. Adjust the va
 Define custom models in the models.py file. The model to be used in main.py should be implemented as the class ModelM.
 
 ## Visualization of Results
-After training, visualize the results using the viz_script.py file. Provide the directory where the results are stored as a command-line argument:
+After training, visualize the results using the viz_script.py file. Provide the directory where the results are stored by modifying the variables directory_name and csv_directory
