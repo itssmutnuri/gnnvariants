@@ -10,18 +10,11 @@ To set up the environment for the GNN Variants project, use the provided `enviro
 conda env create -f environment.yml
 conda activate projectGNN
 ```
+This will create a conda environment named projectGNN with the specified dependencies.
 
-This will create a Conda environment named projectGNN with the specified dependencies.
-
-## Running the Main Script
-The main script, main.py, is the entry point for your project. Execute it using the following command:
-
-```bash
-python main.py
-Ensure you have activated the Conda environment (conda activate projectGNN) before running the script.
-```
 ## Configuration
-All variable configurations are specified in the config.json file. Adjust the values in this file according to your requirements:
+All variable configurations are specified in the `config.json` file. Adjust the values in this file according to your requirements:
+
 - **is_graph:** Boolean indicating whether the data represents a graph (`true`) or not (`false`).
 
 - **ADJ_bool:** Boolean indicating whether the graphs uses country adjacency to construct the adjacency matrix (`true`) or not (`false`).
@@ -64,11 +57,25 @@ All variable configurations are specified in the config.json file. Adjust the va
 
 - **IS_DEBUG:** Boolean indicating whether debugging mode is enabled (`true`) or not (`false`).
 
+Modify the `config.json` file per your preferences, and run the below command to set the config variables:
+
+```bash
+python modulefuncs/config.py config.json
+```
+
+## Running the Main Script
+The main script, `main.py`, is the entry point for your project. Execute it using the following command:
+
+```bash
+python main.py
+```
+Ensure you have activated the Conda environment (as described [here](#setup-environment)), and set the config variables (as described [here](#configuration)) before running the script.
+
 ## Custom Models
-Define custom models in the models.py file. The model to be used in main.py should be implemented as the class ModelM.
+Define custom models in the `models.py` file. The model to be used in `main.py` should be implemented as `class ModelM`.
 
 ## Visualization of Results
-After training, visualize the results using the viz_script.py file. Provide the directory where the results are stored by modifying the variables directory_name and csv_directory
+After training, visualize the results using the `viz_script.py` file. Provide the directory where the results are stored by modifying the variables `directory_name` and `csv_directory`
 
 ## Other Directories
 ### Data
