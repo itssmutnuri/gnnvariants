@@ -37,12 +37,12 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 
 
-from config import is_graph, ADJ_bool, Flights_bool, self_loops, EW_bool
-from config import topX_bool, topX_C, dom_thresh, use_r, use_S
-from config import min_epochs, max_epochs, T, reg_bool
-from config import early_stopper_patience, early_stopper_delta
-from config import variants_path, countries_path, device, ITERATION_NAME
-from config import IS_DEBUG
+from modulefuncs.config import is_graph, ADJ_bool, Flights_bool, self_loops, EW_bool
+from modulefuncs.config import topX_bool, topX_C, dom_thresh, use_r, use_S
+from modulefuncs.config import min_epochs, max_epochs, T, reg_bool
+from modulefuncs.config import early_stopper_patience, early_stopper_delta
+from modulefuncs.config import variants_path, countries_path, device, ITERATION_NAME
+from modulefuncs.config import IS_DEBUG
 
 from modulefuncs.edge_weight_calc import edgeW_calc
 from modulefuncs.data_processing import process_data, process_data_test
