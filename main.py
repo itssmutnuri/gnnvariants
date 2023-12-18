@@ -51,7 +51,7 @@ from modulefuncs.models import EarlyStopper, ModelM
 
 from functools import partial
 
-import path_values as paths
+import modulefuncs.path_values as paths
 
 
 if topX_bool:
