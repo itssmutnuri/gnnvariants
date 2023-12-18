@@ -54,9 +54,9 @@ All variable configurations are specified in the config.json file. Adjust the va
 
 - **early_stopper_delta:** An integer specifying the delta for early stopping.
 
-- **variants_path:** Path to the file containing variant data (`data/all_vars21_clustered_NEW.csv`).
+- **variants_path:** Path to the file containing variant data (`data/all_vars21_clustered_NEW.csv`). This can be edited to evaluate on less variants.
 
-- **countries_path:** Path to the file containing country data (`data/countries_clustered.csv`).
+- **countries_path:** Path to the file containing country data (`data/countries_clustered.csv`). This can be edited to train/evaluate on less countries.
 
 - **device:** Device for computation (`"cpu"` or `"gpu"`). GPU IS CURRENTLY NOT SUPPORTED
 
@@ -69,3 +69,26 @@ Define custom models in the models.py file. The model to be used in main.py shou
 
 ## Visualization of Results
 After training, visualize the results using the viz_script.py file. Provide the directory where the results are stored by modifying the variables directory_name and csv_directory
+
+## Other Directories
+### Data
+This contains all the data used for the various tasks. Data is up to date as of December 17th, 2023
+
+### Data Preprocessing
+The following contains the scripts used to preprocess the data. This includes cleaning the data, getting interpolated data, and calculating S values.
+
+### Results
+All iterations/runs are saved in this directory.
+
+### Experiments
+All experiments ran for our paper can be found in scripts here. Inside the baseline_new directory, we see the matlab code for the trivial and baseline regression models. others correspond to:
+- **DT.py:** Decision Tree Classifier
+- **DT_regression.py:** Decision Tree Regression
+- **GNN_LOSS_0.3.py:** DIL-GCN. Edit p variable to select desired regularization.
+- **MLP.py:** MLP Classifier
+- **MLP_Regression.py:** MLP Regression
+- **RNN2.py:** GRU Regression and Classification
+- **RNN_GNN.py:** T-GCN Regression and Classification
+- **base.py:** Trivial and Adjacency Based Classifiers
+- **embVar_GNNScripy.py:** EE-GCN Regression and Classification
+- **encVar_GNNScripy.py:** AE-GCN Regression and Classification
