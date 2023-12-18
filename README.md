@@ -1,5 +1,5 @@
 # Code for the GNN Variants project
-![Alt Text](Benchmark Pipeline (1).png)
+![Training/Evluation Pipeline](Benchmark Pipeline (1).png)
 
 ## Setup Environment
 
