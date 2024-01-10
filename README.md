@@ -1,4 +1,4 @@
-# Code for the GNN Variants project
+# Code for The GNN Variants Project
 ![Training/Evaluation Pipeline](https://github.com/itssmutnuri/gnnvariants/assets/98141770/6e043a51-3c28-46cc-a971-91038561df7b)
 
 
