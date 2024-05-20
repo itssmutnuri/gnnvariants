@@ -7,12 +7,13 @@ import os
 from datetime import date, timedelta, datetime
 import csv
 import warnings
-
+import json
+pre = True
 # Hide all warnings
 warnings.filterwarnings("ignore")
 #%%
 # Load the CSV data into a pandas DataFrame
-data = pd.read_csv('NEW_DATA_RetroS.csv')
+data = pd.read_csv(r'..\data\NEW_DATA_RetroS.csv')
 
 # Sort the data by 'date'
 data['date'] = pd.to_datetime(data['date'])
@@ -22,13 +23,13 @@ data = data.sort_values(by='date')
 #data['dominant'] = 1
 
 # Create a list of unique countries
-with open(r"countries_clustered.csv", mode = 'r') as file:
+with open(r"..\data\countries_clustered.csv", mode = 'r') as file:
     reader = csv.reader(file)
     countries = []
     for row in reader:
         countries.append(row[0])
 
-with open(r"all_vars21_clustered_NEW.csv", mode = 'r') as file:
+with open(r"..\data\all_vars21_clustered_NEW.csv", mode = 'r') as file:
     reader = csv.reader(file)
     all_variants = []
     for row in reader:
@@ -36,7 +37,7 @@ with open(r"all_vars21_clustered_NEW.csv", mode = 'r') as file:
 
 all_variants = all_variants[1:]
 countries = countries[1:]
-S = pd.read_csv(r"growth_rates_clustered_new.csv")
+S = pd.read_csv(r"..\data\growth_rates_clustered_new.csv")
 # Inject artificial data for countries where it doesn't become prevalent
 # for pango in all_variants:
 #     data2 = data[data['pangoLineage']==pango]
@@ -52,6 +53,54 @@ S = pd.read_csv(r"growth_rates_clustered_new.csv")
 #                                     'pangoLineage2': [pango],
 #                                     'Day': 0,
 #                                     'B': 0})])
+#%%
+#%% Define adjacency matrix
+# routes = pd.read_csv(r"..\data/routes.dat", header = None) 
+# airports = pd.read_csv(r"..\data/airports.dat", header = None) #4th is country
+
+# #Country-AirportID
+# IATA_country = np.transpose(np.array([list(airports[3]), list(airports[0])]))
+
+# rou = np.transpose(np.array([list(routes[3]), list(routes[5])]))
+# route = np.empty(rou.shape, dtype=np.dtype('U100'))
+# for i in range(len(rou)):
+#     try:
+#         while(np.where(IATA_country[:,1]==rou[i][1])[0].size==0) or (np.where(IATA_country[:,1]==rou[i][0])[0].size==0) or (rou[i][0]=='\\N') or (rou[i][1]=='\\N'):
+#             rou = np.delete(rou,i,0)
+#             route = np.delete(route,i,0)
+#     except:
+#         break
+        
+#     route[i][0] = str(IATA_country[np.where(IATA_country[:,1]==rou[i][0]),0][0][0])   
+#     route[i][1] = str(IATA_country[np.where(IATA_country[:,1]==rou[i][1]),0][0][0])
+    
+
+        
+# #United States->USA
+# route[:,0] = np.char.replace(route[:,0], "United States", "USA")
+# route[:,1] = np.char.replace(route[:,1], "United States", "USA")
+
+
+adj_mat = np.zeros((len(countries),len(countries)))
+
+
+with open('..\data/country_adj_fullname.json', 'r') as json_file:
+  data_json = json.load(json_file)
+  for i in range(len(countries)):
+      #Takes care of islands which dont have adjacencies
+      if countries[i] == "Aruba" or countries[i] == "Fiji" or countries[i] == "Guadeloupe" or countries[i] == "Iceland" or countries[i] == "Jamaica" or countries[i] == "Maldives" or countries[i] == "Mauritius" or countries[i] == "New Zealand" or countries[i] =="Seychelles":
+        C = []
+      elif countries[i] == "Hong Kong": 
+        C= ["China"]
+      elif countries[i] == "Russia":
+        C = data_json["Russian Federation"]
+      elif countries[i] =="USA":
+        C = data_json["United States of America"]
+      else:
+        C = data_json[countries[i]]
+        
+      for c in C:
+          adj_mat[i, np.isin(countries,c)] = 1
 #%%
 def process_data(df,T):
     #df['date'] = pd.to_datetime(df['date'])
@@ -75,7 +124,9 @@ def process_data(df,T):
             p_index = all_variants.index(pangoLineage)
             # si = S.S[p_index]
             # Create the feat_matrix and target_matrix
-            feat_matrix = np.zeros((len(countries), T+1))
+            #feat_matrix = np.log(np.zeros((len(countries), (T*2))) + (10**-10))
+            feat_matrix =np.zeros((len(countries), (T*2)))
+            #feat_matrix[:,T*2] = 0
             target_matrix = np.zeros((len(countries), 2))
             target_matrix[:,0] = -1 #Will never reach prevalence
             countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -109,10 +160,18 @@ def process_data(df,T):
                 temp_c = prev_values[(prev_values['country'] == c)].sort_values(by='date')
                 two_week_intervals = pd.date_range(end=pd.Timestamp(d), periods=T, freq='2W-MON')
                 temp_c = temp_c[temp_c['date'].isin(two_week_intervals)]
-                prev_values_c = temp_c['prevsO'].values
+                # prev_values_c = temp_c['prev'].values
+                prev_values_c = temp_c['prevsO'].values  
                 #print(d)
                 #print(temp_c)
-                
+                row_index = countries.index(c)
+                indices = np.where(adj_mat[row_index,:] == 1)[0]
+                c_list_adj = [countries[i] for i in indices]
+                temp_cAd = prev_values[(prev_values['country'].isin(c_list_adj))].sort_values(by='date')
+                temp_cAd = temp_cAd[temp_cAd['date'].isin(two_week_intervals)]
+                # prev_values_cAd = (temp_cAd.groupby('date')['prev'].mean()).values
+                prev_values_cAd = (temp_cAd.groupby('date')['prevsO'].mean()).values
+                #print(prev_values_cAd.values)
                 
                 #print(si)
                 #print(temp_c)
@@ -120,17 +179,33 @@ def process_data(df,T):
                 #print("???????????????????????????????????????????")
                 #print(prev_values_c)
                 # If no prev values were found, fill the row with 0s
-                if len(prev_values_c) == 0:
-                  prev_values_c = np.zeros(T)
-                  si = 0
+                try:
+                    si = temp_c['S'].values[-1]
+                except:
+                    si = 0
+                if (len(prev_values_c) == 0) or (np.all(prev_values_c==0)):
+                  prev_values_c = np.zeros((T))
+                  #si = 0                  
                 elif len(prev_values_c) < T:
-                  prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
+                  prev_values_c = np.pad(prev_values_c, ((T)-len(prev_values_c), 0), 'constant')
                   si = temp_c['S'].values[-1]
                 else:
                   si = temp_c['S'].values[-1]
+                
+                if (len(prev_values_cAd) == 0) or (np.all(prev_values_cAd==0)):
+                  prev_values_cAd = np.zeros((T))
+                  si = 0
+                elif len(prev_values_cAd) < T:
+                  prev_values_cAd = np.pad(prev_values_cAd, ((T)-len(prev_values_cAd), 0), 'constant')
+                #   si = temp_c['S'].values[-1]
+                # else:
+                #   si = temp_c['S'].values[-1]
 
-                #log_prev_vals = prev_values_c#np.log(prev_values_c + (10**-10))
-                appended_prev_si = si# np.append(log_prev_vals, si)
+                log_prev_vals = prev_values_c#np.log(prev_values_c + (10**-10))
+                log_prev_valsAd = prev_values_cAd#np.log(prev_values_cAd + (10**-10))
+                log_prev_vals = np.append(log_prev_vals,log_prev_valsAd)
+                appended_prev_si = log_prev_vals#np.append(log_prev_vals, si)
+                #print(appended_prev_si)
                 row_index = countries.index(c)
 
                 feat_matrix[row_index, : ] = appended_prev_si
@@ -190,7 +265,9 @@ def process_data_test(df,T,d):
         p_index = all_variants.index(pangoLineage)
         si = S.S[p_index]
         # Create the feat_matrix and target_matrix
-        feat_matrix = np.zeros((len(countries), T+1))
+        feat_matrix = np.zeros((len(countries), (T*2)))
+        # feat_matrix = np.log(np.zeros((len(countries), (T*2))) + (10**-10))
+        #feat_matrix[:,(T*2)] = 0
         target_matrix = np.zeros((len(countries), 2))
         target_matrix[:,0] = -1 #Will never reach prevalence
         countries_dom = df[(df['pangoLineage'] == pangoLineage) & (df['prev'] > 1/3)]
@@ -214,6 +291,7 @@ def process_data_test(df,T,d):
                          (df['date'] <= d) &
                          (df['pangoLineage'] == pangoLineage)]
         countries_pres = prev_values['country'].unique()
+        #print(prev_values)
         # what about countries which eventually get filtered out
         
         if len(countries_pres)==0:
@@ -225,6 +303,16 @@ def process_data_test(df,T,d):
             two_week_intervals = pd.date_range(end=pd.Timestamp(d), periods=T, freq='2W-MON')
             temp_c = temp_c[temp_c['date'].isin(two_week_intervals)]
             prev_values_c = temp_c['prevsO'].values
+            if all(temp_c['prev'].values == 0): #Fixes some noisy data during evaluation
+                prev_values_c = temp_c['prev'].values
+                
+            row_index = countries.index(c)
+            indices = np.where(adj_mat[row_index,:] == 1)[0]
+            c_list_adj = [countries[i] for i in indices]
+            temp_cAd = prev_values[(prev_values['country'].isin(c_list_adj))].sort_values(by='date')
+            temp_cAd = temp_cAd[temp_cAd['date'].isin(two_week_intervals)]
+            prev_values_cAd = (temp_cAd.groupby('date')['prevsO'].mean()).values
+            #print(temp_cAd)
             #print(d)
             #print(temp_c)
             
@@ -235,19 +323,32 @@ def process_data_test(df,T,d):
             #print("???????????????????????????????????????????")
             #print(prev_values_c)
             # If no prev values were found, fill the row with 0s
-            if len(prev_values_c) == 0:
-              prev_values_c = np.zeros(T)
+            try:
+                si = temp_c['S'].values[-1]
+            except:
+                si = 0
+            if (len(prev_values_c) == 0) or (np.all(prev_values_c==0)):
+              prev_values_c = np.zeros((T))
               #si = 0
             elif len(prev_values_c) < T:
-              prev_values_c = np.pad(prev_values_c, (T-len(prev_values_c), 0), 'constant')
-              #si = temp_c['S'].values[-1]
+              prev_values_c = np.pad(prev_values_c, ((T)-len(prev_values_c), 0), 'constant')
+              si = temp_c['S'].values[-1]
             else:
               si = temp_c['S'].values[-1]
             
-            #log_prev_vals =prev_values_c#np.log(prev_values_c + (10**-10))
-            appended_prev_si = si #np.append(log_prev_vals, si)
-            row_index = countries.index(c)
-
+            if (len(prev_values_cAd) == 0) or (np.all(prev_values_cAd==0)):
+              prev_values_cAd = np.zeros((T))
+              #si = 0
+            elif len(prev_values_cAd) < T:
+              prev_values_cAd = np.pad(prev_values_cAd, ((T)-len(prev_values_cAd), 0), 'constant')
+              
+              
+            
+            log_prev_vals = prev_values_c#np.log(prev_values_c + (10**-10))
+            log_prev_valsAd = prev_values_cAd#np.log(prev_values_cAd + (10**-10))
+            log_prev_vals = np.append(log_prev_vals,log_prev_valsAd)
+            appended_prev_si = log_prev_vals#np.append(log_prev_vals,si)
+            #print(appended_prev_si)
             feat_matrix[row_index, : ] = appended_prev_si
             
             
@@ -288,12 +389,12 @@ def append_to_csv(filepath, values, header=None):
         writer.writerow(values)
 #%%
 # Prepare the features and labels
-T = 0
+T = 4
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 header = ["CF1", "f11", "MAE1", "MAE2", "pred", "date", "countries"]
 
-ITERATION_NAME = "DT_R_Sonly"#"_WoS"
+ITERATION_NAME = "DT_R_FIXED_Pre_prev_NoS"#"_WoS" still need to do prev with S and just S after next
 
 PARENT_FOLDER = "Results"
 SUB_FOLDER = f"{ITERATION_NAME}_{timestamp}"
@@ -354,11 +455,13 @@ for pango in all_variants:
         correct_idx = (y_test[:,1] == 1) #Does become prevalent in a given country
         correct_idx2 = (y_test[:,0] != 0) #Is not already prevlanet in a given country 
         correct_idx = np.bitwise_and(correct_idx,correct_idx2)
-        
-        
+        mask = np.ones_like(y_test[:,1], dtype=bool)
+        if pre:
+            mask = np.all(X_test[:,0:T] == np.log(0 + (10**-10)),axis=1)
+
         # correct_idx = np.bitwise_and(correct_idx,snapshot.y[:,0].detach().numpy() !=0)
         #y_hat has to be > and a multiple of 14
-        if not (np.any(correct_idx)):
+        if not (np.any(np.bitwise_and(correct_idx,mask))):
         #if sum(y_test[:,0]) == 0: #It became prevalent everywhere
             append_to_csv(filepath, [0, 0, -1, -1, [], d, []], header=header)
             break
@@ -384,10 +487,16 @@ for pango in all_variants:
         cost_median = 0
         # count += 1
         y_hat = clf.predict(X_test)
-        pred = y_hat[correct_idx]
-        cost = cost + np.mean(np.abs(((np.ceil(np.maximum(pred,1)/14)*14)-y_test[correct_idx])))
-        cost_median = cost_median + np.median(np.abs(((np.ceil(np.maximum(pred,1)/14)*14)-y_test[correct_idx])))
-        append_to_csv(filepath, [0, 0, cost, cost_median, [], d, []], header=header)
+        if pre:
+            pred = y_hat[correct_idx & mask]
+            cost = cost + np.mean(np.abs(((np.ceil(np.maximum(pred,1)/14)*14)-y_test[correct_idx & mask])))
+            cost_median = cost_median + np.median(np.abs(((np.ceil(np.maximum(pred,1)/14)*14)-y_test[correct_idx & mask])))
+            append_to_csv(filepath, [0, 0, cost, cost_median, [], d, []], header=header)
+        else:
+            pred = y_hat[correct_idx]
+            cost = cost + np.mean(np.abs(((np.ceil(np.maximum(pred,1)/14)*14)-y_test[correct_idx])))
+            cost_median = cost_median + np.median(np.abs(((np.ceil(np.maximum(pred,1)/14)*14)-y_test[correct_idx])))
+            append_to_csv(filepath, [0, 0, cost, cost_median, [], d, []], header=header)
         # Evaluate the model
         #accuracy = accuracy_score(y_test, y_pred)
         print(f"Decision Tree MAE: {cost_median}")

@@ -22,7 +22,9 @@ import torch.optim.lr_scheduler as sch
 import math
 import torch
 import scipy.io
-from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout
+from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout, MSELoss
+import torch.optim as optim
+
 import torch.nn.functional as F
 from torch_geometric_temporal.nn.recurrent import DCRNN
 from tqdm import tqdm
@@ -194,3 +196,96 @@ class MLPs(torch.nn.Module):
         output = output.view(-1, x.size(1), self.output_layer.out_features)
 
         return output
+
+class AutoEncoder(torch.nn.Module):
+    
+    def __init__(self, input_size=1, encoded_size=1):
+        super(AutoEncoder, self).__init__()
+        self.encoder = Sequential(
+            Linear(input_size, 5),
+            ReLU(),
+            Linear(5, encoded_size)
+        )
+        self.decoder = Sequential(
+            Linear(encoded_size, 5),
+            ReLU(),
+            Linear(5, input_size)
+        )
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return encoded, decoded
+
+    @staticmethod
+    def encoder_block(S_tensor, input_size, encoded_size=1):
+        # Train the autoencoder
+        model = AutoEncoder(input_size=input_size, encoded_size=encoded_size).float()
+        criterion = MSELoss()
+        optimizer = optim.Adam(model.parameters(), lr=0.01)
+        for _ in tqdm(range(200)):
+            _, decoded = model(S_tensor)
+            loss = criterion(decoded, S_tensor)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # Encode S values using the trained autoencoder
+        encoded, _ = model(S_tensor)
+        return encoded.detach().numpy()
+
+class EncodedGCN(torch.nn.Module):
+    def __init__(self, node_features):
+        super(EncodedGCN,self).__init__()
+        self.encoded_size = 1
+        self.conv1 = GCNConv(node_features + self.encoded_size, 32)
+        self.conv2 = GCNConv(32, 16)
+        self.norm1 = norm.GraphNorm(32)
+        self.norm2 = norm.GraphNorm(16)
+        self.fc1 = torch.nn.Linear(16, 1)
+
+    def forward(self, data, edge_weight, s_valuesdf, norm = False):
+        s_values = s_valuesdf['list_of_s_values'].values
+
+        s_values = self.preprocess_s_values(s_values)
+        s_values = torch.tensor(s_values, dtype=torch.float32)
+
+        s_values_size = len(s_values)
+
+        # Dynamically create layers
+        s_fc1 = torch.nn.Linear(s_values_size, s_values_size // 2)
+        s_fc2 = torch.nn.Linear(s_values_size // 2, self.encoded_size)
+
+        x, edge_index = data.x, data.edge_index
+
+        # Process s_values
+        s_encoded = F.relu(s_fc1(s_values))
+        s_encoded = s_fc2(s_encoded)
+
+        s_encoded = s_encoded.unsqueeze(0)  # Add an extra dimension
+        s_encoded = s_encoded.repeat(x.size(0), 1)
+
+        # Concatenate s_encoded with node features
+        x = torch.cat([x, s_encoded], dim=1)
+
+        x1 = self.conv1(x, edge_index, edge_weight)
+        x = F.leaky_relu(x1)
+        if norm:
+          x = self.norm1(x)
+        x = F.dropout(x, training=self.training)
+        x2 = self.conv2(x.float(), edge_index, edge_weight.float())
+        x2 = F.leaky_relu(x2)
+        if norm:
+          x2 = self.norm2(x2)
+
+        #Might need normalization here since we concatenate a value between 0 and 1
+        x1 = self.fc1(x2)
+        return x1
+    
+    def preprocess_s_values(self, s_values):
+        # If s_values is a NumPy array of objects (like lists), flatten and convert
+        if isinstance(s_values, np.ndarray) and s_values.dtype == np.object_:
+            # Flatten each item in s_values and convert to a float type
+            s_values = np.array([item for sublist in s_values for item in sublist], dtype=np.float32)
+
+        return s_values
